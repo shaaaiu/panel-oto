@@ -7,18 +7,28 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Buy Panel Otomatis</h1>
-    <p class="muted">Masukkan username, pilih domain & paket via tombol, lalu bayar via QRIS. Setelah sukses, akun panel dibuat otomatis.</p>
+  <header class="hero">
+    <div class="hero-content">
+      <img src="https://cdn-icons-png.flaticon.com/512/1041/1041916.png" class="hero-icon" alt="icon">
+      <div>
+        <h1>Buy Panel Otomatis ⚙️</h1>
+        <p>Dapatkan server panel otomatis hanya dengan beberapa klik dan pembayaran QRIS!</p>
+      </div>
+    </div>
+  </header>
 
-    <form id="orderForm">
+  <div class="container">
+    <form id="orderForm" class="card">
+      <h2>Form Pemesanan</h2>
+      <p class="muted">Masukkan username dan pilih paket, lalu bayar via QRIS. Panel akan dibuat otomatis.</p>
+
       <div class="field">
         <label>Username</label>
         <input required name="username" maxlength="15" pattern="[a-zA-Z0-9]{3,15}" placeholder="alfath01">
       </div>
 
       <div class="field">
-        <button type="button" id="openSelector" class="secondary large">Pilih Domain & Paket</button>
+        <button type="button" id="openSelector" class="secondary large">Pilih Paket Panel</button>
         <div class="chosen hidden" id="chosenBox"></div>
       </div>
 
@@ -37,27 +47,16 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <!-- Modal Selector -->
+  <!-- Modal Paket -->
   <div class="modal hidden" id="selectorModal">
     <div class="modal-backdrop"></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h3>Pilih Domain & Paket</h3>
+        <h3>Pilih Paket Panel</h3>
         <button class="icon" id="closeModal" aria-label="Tutup">✕</button>
       </div>
       <div class="modal-body">
-        <div class="list">
-          <div class="list-title">Domain</div>
-          <div class="list-items" id="domainList">
-            <!-- injected -->
-          </div>
-        </div>
-        <div class="list">
-          <div class="list-title">Paket Panel</div>
-          <div class="list-items" id="paketList">
-            <!-- injected -->
-          </div>
-        </div>
+        <div class="list-items" id="paketList"></div>
       </div>
       <div class="modal-foot">
         <button class="secondary" id="clearChoice">Reset</button>
