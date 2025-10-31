@@ -24,18 +24,26 @@ const PAKET=[
 ];
 
 // Build modal list
-function openModal(){ $('#selectorModal').classList.remove('hidden'); }
+function openModal(){ 
+  $('#selectorModal').classList.remove('hidden');
+  // restore checked state
+  if(chosenPaket){
+    const el = document.querySelector(`#paketList input[value='${chosenPaket}']`);
+    if(el){ el.checked=true; $('#applyChoice').disabled=false; }
+  }
+}
 function closeModal(){ $('#selectorModal').classList.add('hidden'); }
 $('#openSelector').addEventListener('click', openModal);
 $('#closeModal').addEventListener('click', closeModal);
-$('.modal-backdrop').addEventListener('click', (e)=>{
-  if(e.target.closest('.modal-card')) return;
-  document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));
-});
+// close only if clicking backdrop (not the card)
+document.querySelectorAll('.modal-backdrop').forEach(b=>b.addEventListener('click',e=>{
+  const parent = b.parentElement; if(parent) parent.classList.add('hidden');
+}));
 
 $('#paketList').innerHTML = PAKET.map(p=>`<label><input type="radio" name="paket" value="${p.key}"> ${p.label}</label>`).join('');
 $('#paketList').addEventListener('change', ()=>{
-  chosenPaket = $('input[name=paket]:checked')?.value;
+  const current = document.querySelector('input[name=paket]:checked');
+  chosenPaket = current ? current.value : null;
   $('#applyChoice').disabled = !chosenPaket;
 });
 $('#clearChoice').addEventListener('click', ()=>{
@@ -44,13 +52,17 @@ $('#clearChoice').addEventListener('click', ()=>{
   $('#applyChoice').disabled = true;
 });
 $('#applyChoice').addEventListener('click', ()=>{
+  // fallback: read again in case chosenPaket was null
+  const current = document.querySelector('input[name=paket]:checked');
+  chosenPaket = current ? current.value : chosenPaket;
+  if(!chosenPaket){ return; }
   const p = PAKET.find(x=>x.key===chosenPaket);
   $('#chosenBox').classList.remove('hidden');
   $('#chosenBox').textContent = p.label;
-  $('#submitBtn').disabled = !chosenPaket;
+  $('#submitBtn').disabled = false;
   $('#seePrice').classList.remove('hidden');
   closeModal();
-  showPricePopup(); // otomatis tampilkan popup harga sekali setelah pilih
+  showPricePopup(); // show once
 });
 
 // SFX
@@ -75,13 +87,8 @@ $('#noCancel').addEventListener('click', ()=> $('#confirmCancel').classList.add(
 $('#yesCancel').addEventListener('click', async ()=>{
   $('#confirmCancel').classList.add('hidden');
   if(window.currentOrderId){
-    try{
-      const r=await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'});
-      const j=await r.json();
-      // regardless, reset UI:
-    }catch{}
+    try{ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); }catch{}
   }
-  // reset timers & UI
   if(pollTimer) clearInterval(pollTimer);
   if(countdownTimer) clearInterval(countdownTimer);
   window.currentOrderId=null;
@@ -95,22 +102,27 @@ $('#yesCancel').addEventListener('click', async ()=>{
 $('#orderForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const username = (new FormData(e.target)).get('username').trim();
-  if(!username || !chosenPaket) return showToast('Isi username & pilih paket.');
+  if(!username){ return showToast('Isi username.'); }
+  if(!chosenPaket){ return showToast('Pilih paket.'); }
+  // show processing immediately
+  $('#processingText').textContent = '🔄 Memproses... harap tunggu QRIS muncul.';
   $('#processing').classList.remove('hidden');
+  $('#submitBtn').disabled = true;
   $('#payment').classList.add('hidden'); $('#result').classList.add('hidden');
   try{
     const res = await fetch('/api/order', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, paket: chosenPaket})});
     const j = await res.json();
+    if(!j.ok){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; return showToast(j.error || 'Gagal membuat order'); }
     $('#processing').classList.add('hidden');
-    if(!j.ok) return showToast(j.error || 'Gagal membuat order');
     $('#payment').classList.remove('hidden');
     $('#payTotal').textContent = 'Rp' + fmtRp(j.price);
     $('#payExpiry').textContent = new Date(j.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-    $('#qrcode').src = j.qr_png;
+    $('#qrcode').src = j.qr_png || '';
     startCountdown(j.expiredAt); startPolling(j.orderId);
   }catch(err){
     $('#processing').classList.add('hidden');
-    showToast('Gagal membuat order.');
+    $('#submitBtn').disabled=false;
+    showToast('Gagal membuat order (network).');
   }
 });
 
