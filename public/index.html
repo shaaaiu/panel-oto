@@ -14,7 +14,7 @@
         <h1>Buy Panel Otomatis</h1>
         <p>Pilih paket, bayar via QRIS, panel langsung dibuat otomatis ⚡</p>
       </div>
-      <button id="themeToggle" class="theme-toggle">🌙</button>
+      <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
     </div>
   </header>
 
@@ -33,7 +33,7 @@
         <div id="chosenBox" class="chosen hidden"></div>
       </div>
 
-      <div id="priceInfo" class="price-card hidden"></div>
+      <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
 
       <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
     </form>
@@ -56,6 +56,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
+  <!-- Modal Pilih Paket -->
   <div class="modal hidden" id="selectorModal">
     <div class="modal-backdrop"></div>
     <div class="modal-card">
@@ -70,6 +71,32 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal Harga (Futuristik) -->
+  <div class="modal hidden" id="priceModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-futuristic">
+      <h3>💰 Detail Paket</h3>
+      <div id="priceDetail" class="price-detail"></div>
+      <button class="primary" id="closePrice">OK</button>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Batal -->
+  <div class="modal hidden" id="confirmCancel">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-futuristic">
+      <h3>❓ Batalkan Pembayaran?</h3>
+      <p>Apakah kamu yakin ingin membatalkan pembayaran ini?</p>
+      <div class="modal-actions">
+        <button class="secondary" id="noCancel">Tidak</button>
+        <button class="danger" id="yesCancel">Ya, Batalkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SFX -->
+  <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
 
   <script src="/app.js"></script>
 </body>
