@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Buy Panel Otomatis</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      <img src="https://cdn-icons-png.flaticon.com/512/1040/1040238.png" class="hero-icon" alt="logo">
+      <div>
+        <h1>Buy Panel Otomatis</h1>
+        <p>Pilih paket, bayar via QRIS, panel langsung dibuat otomatis ⚡</p>
+      </div>
+      <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <form id="orderForm" class="card fade-in">
+      <h2>Form Pemesanan</h2>
+      <p class="muted">Masukkan username dan pilih paket. Setelah pembayaran sukses, panel otomatis dibuat.</p>
+
+      <div class="field">
+        <label>Username</label>
+        <input required name="username" maxlength="15" pattern="[a-zA-Z0-9]{3,15}" placeholder="alfath01">
+      </div>
+
+      <div class="field">
+        <button type="button" id="openSelector" class="secondary large">Pilih Paket Panel</button>
+        <div id="chosenBox" class="chosen hidden"></div>
+      </div>
+
+      <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
+
+      <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
+    </form>
+
+    <div id="processing" class="card hidden">
+      <p id="processingText">🔄 Memproses... harap tunggu QRIS muncul.</p>
+    </div>
+
+    <div id="payment" class="card hidden fade-in">
+      <h2>Scan & Bayar</h2>
+      <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
+      <div class="qr-wrapper">
+        <img id="qrcode" alt="QRIS" />
+      </div>
+      <p id="countdown" class="muted"></p>
+      <button id="cancelBtn" class="danger" type="button">Batalkan Pembayaran</button>
+    </div>
+
+    <div id="result" class="card hidden fade-in"></div>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <!-- Modal Pilih Paket -->
+  <div class="modal hidden" id="selectorModal" aria-modal="true" role="dialog">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card" role="document">
+      <div class="modal-head">
+        <h3>Pilih Paket Panel</h3>
+        <button class="icon" id="closeModal" aria-label="Tutup">✕</button>
+      </div>
+      <div class="modal-body" id="paketList"></div>
+      <div class="modal-foot">
+        <button class="secondary" id="clearChoice" type="button">Reset</button>
+        <button class="primary" id="applyChoice" type="button" disabled>Simpan Pilihan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Harga -->
+  <div class="modal hidden" id="priceModal" aria-modal="true" role="dialog">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-futuristic">
+      <h3>💰 Detail Paket</h3>
+      <div id="priceDetail" class="price-detail"></div>
+      <button class="primary" id="closePrice" type="button">OK</button>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Batal -->
+  <div class="modal hidden" id="confirmCancel" aria-modal="true" role="dialog">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card modal-futuristic">
+      <h3>❓ Batalkan Pembayaran?</h3>
+      <p>Apakah kamu yakin ingin membatalkan pembayaran ini?</p>
+      <div class="modal-actions">
+        <button class="secondary" id="noCancel" type="button">Tidak</button>
+        <button class="danger" id="yesCancel" type="button">Ya, Batalkan</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
+  <script src="/app.js"></script>
+</body>
+</html>
