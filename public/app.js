@@ -23,46 +23,34 @@ const PAKET=[
   {key:'unli',label:'UNLI (Rp15.000)',harga:15000,cpu:500}
 ];
 
-// Build modal list
 function openModal(){ 
   $('#selectorModal').classList.remove('hidden');
-  // restore checked state
   if(chosenPaket){
-    const el = document.querySelector(`#paketList input[value='${chosenPaket}']`);
+    const el=document.querySelector(`#paketList input[value='${chosenPaket}']`);
     if(el){ el.checked=true; $('#applyChoice').disabled=false; }
   }
 }
 function closeModal(){ $('#selectorModal').classList.add('hidden'); }
 $('#openSelector').addEventListener('click', openModal);
 $('#closeModal').addEventListener('click', closeModal);
-// close only if clicking backdrop (not the card)
-document.querySelectorAll('.modal-backdrop').forEach(b=>b.addEventListener('click',e=>{
-  const parent = b.parentElement; if(parent) parent.classList.add('hidden');
-}));
+document.querySelectorAll('.modal-backdrop').forEach(b=>b.addEventListener('click',e=>{ const parent=b.parentElement; if(parent) parent.classList.add('hidden'); }));
 
-$('#paketList').innerHTML = PAKET.map(p=>`<label><input type="radio" name="paket" value="${p.key}"> ${p.label}</label>`).join('');
-$('#paketList').addEventListener('change', ()=>{
-  const current = document.querySelector('input[name=paket]:checked');
-  chosenPaket = current ? current.value : null;
-  $('#applyChoice').disabled = !chosenPaket;
+$('#paketList').innerHTML=PAKET.map(p=>`<label><input type="radio" name="paket" value="${p.key}"> ${p.label}</label>`).join('');
+$('#paketList').addEventListener('change',()=>{
+  const current=document.querySelector('input[name=paket]:checked');
+  chosenPaket=current?current.value:null;
+  $('#applyChoice').disabled=!chosenPaket;
 });
-$('#clearChoice').addEventListener('click', ()=>{
-  chosenPaket = null;
-  document.querySelectorAll('#paketList input').forEach(r=>r.checked=false);
-  $('#applyChoice').disabled = true;
+$('#clearChoice').addEventListener('click',()=>{
+  chosenPaket=null; document.querySelectorAll('#paketList input').forEach(r=>r.checked=false); $('#applyChoice').disabled=true;
 });
-$('#applyChoice').addEventListener('click', ()=>{
-  // fallback: read again in case chosenPaket was null
-  const current = document.querySelector('input[name=paket]:checked');
-  chosenPaket = current ? current.value : chosenPaket;
-  if(!chosenPaket){ return; }
-  const p = PAKET.find(x=>x.key===chosenPaket);
-  $('#chosenBox').classList.remove('hidden');
-  $('#chosenBox').textContent = p.label;
-  $('#submitBtn').disabled = false;
-  $('#seePrice').classList.remove('hidden');
-  closeModal();
-  showPricePopup(); // show once
+$('#applyChoice').addEventListener('click',()=>{
+  const current=document.querySelector('input[name=paket]:checked'); chosenPaket=current?current.value:chosenPaket;
+  if(!chosenPaket) return;
+  const p=PAKET.find(x=>x.key===chosenPaket);
+  $('#chosenBox').classList.remove('hidden'); $('#chosenBox').textContent=p.label;
+  $('#submitBtn').disabled=false; $('#seePrice').classList.remove('hidden');
+  closeModal(); showPricePopup();
 });
 
 // SFX
@@ -70,63 +58,44 @@ const playSound=(id)=>{ const el=$(id); if(el){ el.currentTime=0; el.play().catc
 
 // Price popup
 function showPricePopup(){
-  const p = PAKET.find(x=>x.key===chosenPaket); if(!p) return;
-  $('#priceDetail').innerHTML = `<p><b>Harga:</b> Rp${fmtRp(p.harga)}</p><p><b>Paket:</b> ${p.key.toUpperCase()} / CPU ${p.cpu}%</p>`;
-  playSound('#ding');
-  $('#priceModal').classList.remove('hidden');
+  const p=PAKET.find(x=>x.key===chosenPaket); if(!p) return;
+  $('#priceDetail').innerHTML=`<p><b>Harga:</b> Rp${fmtRp(p.harga)}</p><p><b>Paket:</b> ${p.key.toUpperCase()} / CPU ${p.cpu}%</p>`;
+  playSound('#ding'); $('#priceModal').classList.remove('hidden');
 }
 $('#seePrice').addEventListener('click', showPricePopup);
 $('#closePrice').addEventListener('click', ()=> $('#priceModal').classList.add('hidden'));
 
 // Cancel payment confirm popup
-$('#cancelBtn').addEventListener('click', ()=>{
-  playSound('#ding');
-  $('#confirmCancel').classList.remove('hidden');
-});
+$('#cancelBtn').addEventListener('click', ()=>{ playSound('#ding'); $('#confirmCancel').classList.remove('hidden'); });
 $('#noCancel').addEventListener('click', ()=> $('#confirmCancel').classList.add('hidden'));
 $('#yesCancel').addEventListener('click', async ()=>{
   $('#confirmCancel').classList.add('hidden');
-  if(window.currentOrderId){
-    try{ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); }catch{}
-  }
-  if(pollTimer) clearInterval(pollTimer);
-  if(countdownTimer) clearInterval(countdownTimer);
-  window.currentOrderId=null;
-  $('#qrcode').src='';
-  $('#payment').classList.add('hidden');
-  showToast('Pembayaran dibatalkan.');
-  $('#orderForm').scrollIntoView({behavior:'smooth'});
+  try{ if(window.currentOrderId){ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); } }catch{}
+  if(pollTimer) clearInterval(pollTimer); if(countdownTimer) clearInterval(countdownTimer);
+  window.currentOrderId=null; $('#qrcode').src=''; $('#payment').classList.add('hidden');
+  showToast('Pembayaran dibatalkan.'); $('#orderForm').scrollIntoView({behavior:'smooth'});
 });
 
 // Submit
 $('#orderForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
-  const username = (new FormData(e.target)).get('username').trim();
-  if(!username){ return showToast('Isi username.'); }
-  if(!chosenPaket){ return showToast('Pilih paket.'); }
-  // show processing immediately
-  $('#processingText').textContent = '🔄 Memproses... harap tunggu QRIS muncul.';
-  $('#processing').classList.remove('hidden');
-  $('#submitBtn').disabled = true;
-  $('#payment').classList.add('hidden'); $('#result').classList.add('hidden');
+  const username=(new FormData(e.target)).get('username').trim();
+  if(!username) return showToast('Isi username.');
+  if(!chosenPaket) return showToast('Pilih paket.');
+  $('#processingText').textContent='🔄 Memproses... harap tunggu QRIS muncul.';
+  $('#processing').classList.remove('hidden'); $('#submitBtn').disabled=true; $('#payment').classList.add('hidden'); $('#result').classList.add('hidden');
   try{
-    const res = await fetch('/api/order', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, paket: chosenPaket})});
-    const j = await res.json();
-    if(!j.ok){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; return showToast(j.error || 'Gagal membuat order'); }
-    $('#processing').classList.add('hidden');
-    $('#payment').classList.remove('hidden');
-    $('#payTotal').textContent = 'Rp' + fmtRp(j.price);
-    $('#payExpiry').textContent = new Date(j.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-    $('#qrcode').src = j.qr_png || '';
-    startCountdown(j.expiredAt); startPolling(j.orderId);
-  }catch(err){
-    $('#processing').classList.add('hidden');
-    $('#submitBtn').disabled=false;
-    showToast('Gagal membuat order (network).');
-  }
+    const res=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,paket:chosenPaket})});
+    const j=await res.json();
+    if(!j.ok){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; return showToast(j.error||'Gagal membuat order'); }
+    $('#processing').classList.add('hidden'); $('#payment').classList.remove('hidden');
+    $('#payTotal').textContent='Rp'+fmtRp(j.price);
+    $('#payExpiry').textContent=new Date(j.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    $('#qrcode').src=j.qr_png||''; startCountdown(j.expiredAt); startPolling(j.orderId);
+  }catch(err){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; showToast('Gagal membuat order (network).'); }
 });
 
 function startCountdown(exp){ const tick=()=>{const left=exp-Date.now(); if(left<=0){$('#countdown').textContent='Kadaluarsa'; clearInterval(countdownTimer);} else {$('#countdown').textContent='Sisa '+Math.floor(left/60000)+'m '+Math.floor((left%60000)/1000)+'s';}}; tick(); countdownTimer=setInterval(tick,1000); }
 function startPolling(id){ window.currentOrderId=id; pollTimer=setInterval(async()=>{ const r=await fetch(`/api/order/${id}/status`); const j=await r.json(); if(j.status==='success'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showResult(j.result); } else if(j.status==='expired'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showToast('Kadaluarsa'); } },5000); }
-function showResult(r){ const el=$('#result'); el.classList.remove('hidden'); el.innerHTML = `<h2>Panel Siap 🎉</h2><p><b>Login:</b> <a href='${r.login}' target='_blank'>${r.login}</a></p><p><b>Username:</b> ${r.username}</p><p><b>Password:</b> ${r.password}</p><p><b>RAM:</b> ${r.memory} MB • <b>CPU:</b> ${r.cpu}%</p><p><b>Dibuat:</b> ${r.dibuat} WIB • <b>Expired:</b> ${r.expired}</p>`; window.scrollTo({top:el.offsetTop,behavior:'smooth'}); }
+function showResult(r){ const el=$('#result'); el.classList.remove('hidden'); el.innerHTML=`<h2>Panel Siap 🎉</h2><p><b>Login:</b> <a href='${r.login}' target='_blank'>${r.login}</a></p><p><b>Username:</b> ${r.username}</p><p><b>Password:</b> ${r.password}</p><p><b>RAM:</b> ${r.memory} MB • <b>CPU:</b> ${r.cpu}%</p><p><b>Dibuat:</b> ${r.dibuat} WIB • <b>Expired:</b> ${r.expired}</p>`; window.scrollTo({top:el.offsetTop,behavior:'smooth'}); }
 function showToast(t){ const el=$('#toast'); el.textContent=t; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3000); }
