@@ -1,19 +1,62 @@
 const $ = (s)=>document.querySelector(s);
 const fmtRp = (n)=> new Intl.NumberFormat('id-ID').format(n);
 let pollTimer = null;
+let countdownTimer = null;
+
+const paketPanel = $('#paketPanel');
+const toggleBtn = $('#togglePaket');
+const submitBtn = $('#submitBtn');
+
+toggleBtn.addEventListener('click', () => {
+  paketPanel.classList.toggle('hidden');
+  paketPanel.classList.toggle('open');
+});
+
+// Enable submit when a paket selected
+paketPanel.addEventListener('change', (e) => {
+  if (e.target.name === 'paket') submitBtn.disabled = false;
+});
+
+$('#cancelBtn').addEventListener('click', async () => {
+  if (!window.currentOrderId) return;
+  if (!confirm('Yakin ingin membatalkan pembayaran ini?')) return;
+  try {
+    const res = await fetch(`/api/order/${window.currentOrderId}`, { method:'DELETE' });
+    const json = await res.json();
+    if (json.ok) {
+      cleanupTimers();
+      $('#payment').classList.add('hidden');
+      $('#cancelBtn').classList.add('hidden');
+      showToast('✅ Pembayaran dibatalkan.');
+    } else {
+      showToast(json.error || 'Gagal membatalkan.');
+    }
+  } catch (e) {
+    showToast('Gagal membatalkan.');
+  }
+});
+
+function cleanupTimers() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  window.currentOrderId = null;
+}
 
 $('#orderForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  clearInterval(pollTimer);
+  cleanupTimers();
   $('#result').classList.add('hidden');
   $('#payment').classList.add('hidden');
 
   const fd = new FormData(e.target);
   const payload = {
     username: fd.get('username').trim(),
-    nomor: fd.get('nomor').trim(),
     paket: fd.get('paket')
   };
+  if (!payload.paket) {
+    showToast('Pilih paket terlebih dahulu.');
+    return;
+  }
 
   try {
     const res = await fetch('/api/order', {
@@ -24,12 +67,13 @@ $('#orderForm').addEventListener('submit', async (e) => {
     const json = await res.json();
     if (!json.ok) throw new Error(json.error || 'Gagal membuat order');
 
-    // Show payment UI
     $('#payment').classList.remove('hidden');
     $('#payTotal').textContent = 'Rp' + fmtRp(json.price);
     $('#payExpiry').textContent = new Date(json.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
     $('#qrcode').src = json.qr_png;
 
+    window.currentOrderId = json.orderId;
+    $('#cancelBtn').classList.remove('hidden');
     startCountdown(json.expiredAt);
     startPolling(json.orderId);
   } catch (err) {
@@ -43,10 +87,11 @@ function startCountdown(expiredAt) {
     const m = Math.floor(left/60000);
     const s = Math.floor((left%60000)/1000);
     $('#countdown').textContent = (left>0) ? `Sisa waktu ${m}m ${s}s` : 'Kadaluarsa';
-    if (left<=0) clearInterval(pollTimer);
+    if (left<=0) cleanupTimers();
   };
   tick();
-  setInterval(tick, 1000);
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(tick, 1000);
 }
 
 function startPolling(orderId) {
@@ -56,11 +101,15 @@ function startPolling(orderId) {
       const json = await res.json();
       if (!json.ok && json.status!=='error') throw new Error(json.error || 'Gagal cek status');
       if (json.status === 'success') {
-        clearInterval(pollTimer);
+        cleanupTimers();
+        $('#cancelBtn').classList.add('hidden');
         showResult(json.result);
-      } else if (json.status === 'expired') {
-        clearInterval(pollTimer);
-        showToast('Pesanan kadaluarsa. Silakan buat order baru.');
+      } else if (json.status === 'expired' || json.status === 'cancelled') {
+        cleanupTimers();
+        $('#cancelBtn').classList.add('hidden');
+        const msg = (json.status === 'expired') ? 'Pesanan kadaluarsa. Silakan buat order baru.' : 'Pesanan dibatalkan.';
+        showToast(msg);
+        $('#payment').classList.add('hidden');
       }
     } catch (e) {
       // ignore transient

@@ -9,36 +9,34 @@
 <body>
   <div class="container">
     <h1>Buy Panel Otomatis</h1>
-    <p class="muted">Masukkan username & nomor (diawali 62), pilih paket, lalu bayar via QRIS. Setelah sukses, akun panel akan dibuat otomatis.</p>
+    <p class="muted">Masukkan username, pilih paket (via tombol), lalu bayar via QRIS. Setelah sukses, akun panel dibuat otomatis.</p>
 
     <form id="orderForm">
       <div class="field">
         <label>Username</label>
         <input required name="username" maxlength="15" pattern="[a-zA-Z0-9]{3,15}" placeholder="alfath01">
       </div>
-      <div class="field">
-        <label>Nomor WhatsApp (diawali 62)</label>
-        <input required name="nomor" pattern="62\d+" placeholder="628xxxxx">
-      </div>
 
       <div class="field">
-        <label>Pilih Paket</label>
-        <div class="grid">
-          <label><input type="radio" name="paket" value="1gb" required> 1GB (Rp2.000)</label>
-          <label><input type="radio" name="paket" value="2gb"> 2GB (Rp3.000)</label>
-          <label><input type="radio" name="paket" value="3gb"> 3GB (Rp4.000)</label>
-          <label><input type="radio" name="paket" value="4gb"> 4GB (Rp5.000)</label>
-          <label><input type="radio" name="paket" value="5gb"> 5GB (Rp6.000)</label>
-          <label><input type="radio" name="paket" value="6gb"> 6GB (Rp7.000)</label>
-          <label><input type="radio" name="paket" value="7gb"> 7GB (Rp8.000)</label>
-          <label><input type="radio" name="paket" value="8gb"> 8GB (Rp9.000)</label>
-          <label><input type="radio" name="paket" value="9gb"> 9GB (Rp10.000)</label>
-          <label><input type="radio" name="paket" value="10gb"> 10GB (Rp12.000)</label>
-          <label><input type="radio" name="paket" value="unli"> UNLI (Rp15.000)</label>
+        <button type="button" id="togglePaket" class="secondary">Pilih Paket Panel</button>
+        <div id="paketPanel" class="panel hidden">
+          <div class="grid">
+            <label><input type="radio" name="paket" value="1gb" required> 1GB (Rp2.000)</label>
+            <label><input type="radio" name="paket" value="2gb"> 2GB (Rp3.000)</label>
+            <label><input type="radio" name="paket" value="3gb"> 3GB (Rp4.000)</label>
+            <label><input type="radio" name="paket" value="4gb"> 4GB (Rp5.000)</label>
+            <label><input type="radio" name="paket" value="5gb"> 5GB (Rp6.000)</label>
+            <label><input type="radio" name="paket" value="6gb"> 6GB (Rp7.000)</label>
+            <label><input type="radio" name="paket" value="7gb"> 7GB (Rp8.000)</label>
+            <label><input type="radio" name="paket" value="8gb"> 8GB (Rp9.000)</label>
+            <label><input type="radio" name="paket" value="9gb"> 9GB (Rp10.000)</label>
+            <label><input type="radio" name="paket" value="10gb"> 10GB (Rp12.000)</label>
+            <label><input type="radio" name="paket" value="unli"> UNLI (Rp15.000)</label>
+          </div>
         </div>
       </div>
 
-      <button type="submit" class="primary">Buat QRIS & Order</button>
+      <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
     </form>
 
     <div id="payment" class="card hidden">
@@ -46,6 +44,7 @@
       <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
       <img id="qrcode" alt="QRIS" />
       <p id="countdown" class="muted"></p>
+      <button id="cancelBtn" class="danger hidden" type="button">Batalkan Pembayaran</button>
     </div>
 
     <div id="result" class="card hidden"></div>
