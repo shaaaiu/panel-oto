@@ -9,18 +9,19 @@
 <body>
   <header class="hero">
     <div class="hero-content">
-      <img src="https://cdn-icons-png.flaticon.com/512/1041/1041916.png" class="hero-icon" alt="icon">
+      <img src="https://cdn-icons-png.flaticon.com/512/1040/1040238.png" class="hero-icon" alt="logo">
       <div>
-        <h1>Buy Panel Otomatis ⚙️</h1>
-        <p>Dapatkan server panel otomatis hanya dengan beberapa klik dan pembayaran QRIS!</p>
+        <h1>Buy Panel Otomatis</h1>
+        <p>Dapatkan panel server instan dengan pembayaran QRIS otomatis.</p>
       </div>
+      <button id="themeToggle" class="theme-toggle">🌙</button>
     </div>
   </header>
 
   <div class="container">
-    <form id="orderForm" class="card">
+    <form id="orderForm" class="card fade-in">
       <h2>Form Pemesanan</h2>
-      <p class="muted">Masukkan username dan pilih paket, lalu bayar via QRIS. Panel akan dibuat otomatis.</p>
+      <p class="muted">Masukkan username dan pilih paket untuk membuat panel otomatis.</p>
 
       <div class="field">
         <label>Username</label>
@@ -35,15 +36,21 @@
       <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
     </form>
 
-    <div id="payment" class="card hidden">
-      <h2>Scan & Bayar</h2>
-      <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
-      <img id="qrcode" alt="QRIS" />
-      <p id="countdown" class="muted"></p>
-      <button id="cancelBtn" class="danger hidden" type="button">Batalkan Pembayaran</button>
+    <div id="processing" class="card hidden">
+      <p>🔄 Memproses... harap tunggu QRIS muncul.</p>
     </div>
 
-    <div id="result" class="card hidden"></div>
+    <div id="payment" class="card hidden fade-in">
+      <h2>Scan & Bayar</h2>
+      <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
+      <div class="qr-wrapper">
+        <img id="qrcode" alt="QRIS" />
+      </div>
+      <p id="countdown" class="muted"></p>
+      <button id="cancelBtn" class="danger" type="button">Batalkan Pembayaran</button>
+    </div>
+
+    <div id="result" class="card hidden fade-in"></div>
     <div id="toast" class="toast hidden"></div>
   </div>
 
@@ -55,9 +62,7 @@
         <h3>Pilih Paket Panel</h3>
         <button class="icon" id="closeModal" aria-label="Tutup">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="list-items" id="paketList"></div>
-      </div>
+      <div class="modal-body" id="paketList"></div>
       <div class="modal-foot">
         <button class="secondary" id="clearChoice">Reset</button>
         <button class="primary" id="applyChoice" disabled>Simpan Pilihan</button>
