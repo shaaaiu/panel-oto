@@ -1,20 +1,79 @@
 const $ = (s)=>document.querySelector(s);
 const fmtRp = (n)=> new Intl.NumberFormat('id-ID').format(n);
+
 let pollTimer = null;
 let countdownTimer = null;
+let chosen = { domain:null, paket:null };
 
-const paketPanel = $('#paketPanel');
-const toggleBtn = $('#togglePaket');
-const submitBtn = $('#submitBtn');
+const DOMAINS = [
+  'ryuushop.web.id',
+  'ryuuxiao.biz.id',
+  'xiaopanel.biz.id',
+  'xiaoshop.my.id',
+  'xiaoprivate.biz.id',
+  'xiao-panel-free.biz.id'
+];
 
-toggleBtn.addEventListener('click', () => {
-  paketPanel.classList.toggle('hidden');
-  paketPanel.classList.toggle('open');
+const PAKET = [
+  { key:'1gb',  label:'1GB (Rp2.000)' },
+  { key:'2gb',  label:'2GB (Rp3.000)' },
+  { key:'3gb',  label:'3GB (Rp4.000)' },
+  { key:'4gb',  label:'4GB (Rp5.000)' },
+  { key:'5gb',  label:'5GB (Rp6.000)' },
+  { key:'6gb',  label:'6GB (Rp7.000)' },
+  { key:'7gb',  label:'7GB (Rp8.000)' },
+  { key:'8gb',  label:'8GB (Rp9.000)' },
+  { key:'9gb',  label:'9GB (Rp10.000)' },
+  { key:'10gb', label:'10GB (Rp12.000)' },
+  { key:'unli', label:'UNLI (Rp15.000)' }
+];
+
+// Build modal lists
+function buildLists() {
+  const dEl = $('#domainList');
+  dEl.innerHTML = DOMAINS.map((d,i)=>`
+    <label class="row"><input type="radio" name="domain" value="${d}"> ${d}</label>
+  `).join('');
+
+  const pEl = $('#paketList');
+  pEl.innerHTML = PAKET.map(p=>`
+    <label class="row"><input type="radio" name="paket" value="${p.key}"> ${p.label}</label>
+  `).join('');
+}
+buildLists();
+
+function openModal(){ $('#selectorModal').classList.remove('hidden'); }
+function closeModal(){ $('#selectorModal').classList.add('hidden'); }
+
+$('#openSelector').addEventListener('click', openModal);
+$('#closeModal').addEventListener('click', closeModal);
+$('.modal-backdrop').addEventListener('click', closeModal);
+
+$('#clearChoice').addEventListener('click', ()=>{
+  chosen = { domain:null, paket:null };
+  document.querySelectorAll('#selectorModal input[type=radio]').forEach(r=> r.checked = false);
+  $('#applyChoice').disabled = true;
 });
 
-// Enable submit when a paket selected
-paketPanel.addEventListener('change', (e) => {
-  if (e.target.name === 'paket') submitBtn.disabled = false;
+// Enable save when both chosen
+$('#selectorModal').addEventListener('change', ()=>{
+  const domain = $('input[name=domain]:checked')?.value || null;
+  const paket = $('input[name=paket]:checked')?.value || null;
+  chosen = { domain, paket };
+  $('#applyChoice').disabled = !(domain && paket);
+});
+
+$('#applyChoice').addEventListener('click', ()=>{
+  // Show selected chips
+  $('#chosenBox').classList.remove('hidden');
+  $('#chosenBox').innerHTML = `
+    <div class="chips">
+      <span class="chip">${chosen.domain}</span>
+      <span class="chip">${PAKET.find(p=>p.key===chosen.paket).label}</span>
+    </div>
+  `;
+  $('#submitBtn').disabled = !(chosen.domain && chosen.paket);
+  closeModal();
 });
 
 $('#cancelBtn').addEventListener('click', async () => {
@@ -48,13 +107,9 @@ $('#orderForm').addEventListener('submit', async (e) => {
   $('#result').classList.add('hidden');
   $('#payment').classList.add('hidden');
 
-  const fd = new FormData(e.target);
-  const payload = {
-    username: fd.get('username').trim(),
-    paket: fd.get('paket')
-  };
-  if (!payload.paket) {
-    showToast('Pilih paket terlebih dahulu.');
+  const username = (new FormData(e.target)).get('username').trim();
+  if (!username || !chosen.domain || !chosen.paket) {
+    showToast('Lengkapi username, domain, dan paket.');
     return;
   }
 
@@ -62,7 +117,7 @@ $('#orderForm').addEventListener('submit', async (e) => {
     const res = await fetch('/api/order', {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ username, paket: chosen.paket, domain: chosen.domain })
     });
     const json = await res.json();
     if (!json.ok) throw new Error(json.error || 'Gagal membuat order');
@@ -101,8 +156,10 @@ function startPolling(orderId) {
       const json = await res.json();
       if (!json.ok && json.status!=='error') throw new Error(json.error || 'Gagal cek status');
       if (json.status === 'success') {
+        // AUTO HIDE QRIS on success
         cleanupTimers();
         $('#cancelBtn').classList.add('hidden');
+        $('#payment').classList.add('hidden');
         showResult(json.result);
       } else if (json.status === 'expired' || json.status === 'cancelled') {
         cleanupTimers();
@@ -124,6 +181,7 @@ function showResult(r) {
   el.classList.remove('hidden');
   el.innerHTML = `
     <h2>Panel Siap 🎉</h2>
+    ${r.domain ? `<p><b>Domain:</b> ${r.domain}</p>` : ''}
     <p><b>Login:</b> <a href="${r.login}" target="_blank">${r.login}</a></p>
     <p><b>Username:</b> ${r.username}</p>
     <p><b>Password:</b> ${r.password}</p>

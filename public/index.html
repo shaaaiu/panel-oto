@@ -9,7 +9,7 @@
 <body>
   <div class="container">
     <h1>Buy Panel Otomatis</h1>
-    <p class="muted">Masukkan username, pilih paket (via tombol), lalu bayar via QRIS. Setelah sukses, akun panel dibuat otomatis.</p>
+    <p class="muted">Masukkan username, pilih domain & paket via tombol, lalu bayar via QRIS. Setelah sukses, akun panel dibuat otomatis.</p>
 
     <form id="orderForm">
       <div class="field">
@@ -18,22 +18,8 @@
       </div>
 
       <div class="field">
-        <button type="button" id="togglePaket" class="secondary">Pilih Paket Panel</button>
-        <div id="paketPanel" class="panel hidden">
-          <div class="grid">
-            <label><input type="radio" name="paket" value="1gb" required> 1GB (Rp2.000)</label>
-            <label><input type="radio" name="paket" value="2gb"> 2GB (Rp3.000)</label>
-            <label><input type="radio" name="paket" value="3gb"> 3GB (Rp4.000)</label>
-            <label><input type="radio" name="paket" value="4gb"> 4GB (Rp5.000)</label>
-            <label><input type="radio" name="paket" value="5gb"> 5GB (Rp6.000)</label>
-            <label><input type="radio" name="paket" value="6gb"> 6GB (Rp7.000)</label>
-            <label><input type="radio" name="paket" value="7gb"> 7GB (Rp8.000)</label>
-            <label><input type="radio" name="paket" value="8gb"> 8GB (Rp9.000)</label>
-            <label><input type="radio" name="paket" value="9gb"> 9GB (Rp10.000)</label>
-            <label><input type="radio" name="paket" value="10gb"> 10GB (Rp12.000)</label>
-            <label><input type="radio" name="paket" value="unli"> UNLI (Rp15.000)</label>
-          </div>
-        </div>
+        <button type="button" id="openSelector" class="secondary large">Pilih Domain & Paket</button>
+        <div class="chosen hidden" id="chosenBox"></div>
       </div>
 
       <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
@@ -49,6 +35,35 @@
 
     <div id="result" class="card hidden"></div>
     <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <!-- Modal Selector -->
+  <div class="modal hidden" id="selectorModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Pilih Domain & Paket</h3>
+        <button class="icon" id="closeModal" aria-label="Tutup">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="list">
+          <div class="list-title">Domain</div>
+          <div class="list-items" id="domainList">
+            <!-- injected -->
+          </div>
+        </div>
+        <div class="list">
+          <div class="list-title">Paket Panel</div>
+          <div class="list-items" id="paketList">
+            <!-- injected -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="secondary" id="clearChoice">Reset</button>
+        <button class="primary" id="applyChoice" disabled>Simpan Pilihan</button>
+      </div>
+    </div>
   </div>
 
   <script src="/app.js"></script>
