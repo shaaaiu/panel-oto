@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import moment from 'moment-timezone';
 import QRCode from 'qrcode';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -21,9 +20,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Config (from .env) ---
 const CONFIG = {
-  ATLANTIC_API_KEY: process.env.ATLANTIC_API_KEY,       // apikeyAtlantic
-  PTERO_DOMAIN: process.env.PTERO_DOMAIN,               // e.g. https://panel.xiao-store.web.id
-  PTERO_APP_KEY: process.env.PTERO_APP_KEY,             // Application API Key (Bearer)
+  ATLANTIC_API_KEY: process.env.ATLANTIC_API_KEY,
+  PTERO_DOMAIN: process.env.PTERO_DOMAIN,
+  PTERO_APP_KEY: process.env.PTERO_APP_KEY,
   EGG_ID: parseInt(process.env.PTERO_EGG_ID || '15', 10),
   LOCATION_ID: parseInt(process.env.PTERO_LOCATION_ID || '1', 10),
   NEST_ID: parseInt(process.env.PTERO_NEST_ID || '5', 10),
@@ -32,7 +31,7 @@ const CONFIG = {
 };
 
 // --- Simple in-memory store (use DB for production) ---
-const orders = new Map(); // id -> {username, nomor, paket, price, ...}
+const orders = new Map(); // id -> { ... }
 
 // Paket mapping
 const PAKET = {
@@ -49,20 +48,9 @@ const PAKET = {
   'unli': { harga: 15000, memo: 999999, cpu: 500 }
 };
 
-function isValidUsername(u) {
-  return /^[a-zA-Z0-9]{3,15}$/.test(u);
-}
-function isValidNomor(n) {
-  return /^62\d+$/.test(n);
-}
-function toRupiah(n) {
-  return n.toLocaleString('id-ID');
-}
-function expiryTimestamp(minutes=6) {
-  return Date.now() + minutes*60*1000;
-}
+function isValidUsername(u) { return /^[a-zA-Z0-9]{3,15}$/.test(u); }
+function expiryTimestamp(minutes=6) { return Date.now() + minutes*60*1000; }
 
-// Common fetch helper (Node 18+ has global fetch)
 async function atlanticCreateQRIS({ api_key, reff_id, nominal }) {
   const body = new URLSearchParams();
   body.append('api_key', api_key);
@@ -70,12 +58,11 @@ async function atlanticCreateQRIS({ api_key, reff_id, nominal }) {
   body.append('nominal', String(nominal));
   body.append('type', 'ewallet');
   body.append('metode', 'qrisfast');
-
   const res = await fetch('https://atlantich2h.com/deposit/create', { method:'POST', body });
   if (!res.ok) throw new Error(`Atlantic create error HTTP ${res.status}`);
   const json = await res.json();
   if (!json.status) throw new Error(`Atlantic create error: ${json.message || 'unknown'}`);
-  return json.data; // { id, qr_string, ... }
+  return json.data;
 }
 
 async function atlanticCheckStatus({ api_key, id }) {
@@ -90,7 +77,6 @@ async function atlanticCheckStatus({ api_key, id }) {
 
 // Pterodactyl helpers
 async function pteroCreateOrGetUser({ email, username, password }) {
-  // Try create, if fail because exists, fetch by email
   const createRes = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/users`, {
     method: 'POST',
     headers: {
@@ -98,23 +84,13 @@ async function pteroCreateOrGetUser({ email, username, password }) {
       'Content-Type':'application/json',
       'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}`
     },
-    body: JSON.stringify({
-      email, username,
-      first_name: username,
-      last_name: username,
-      language: 'en',
-      password
-    })
+    body: JSON.stringify({ email, username, first_name: username, last_name: username, language: 'en', password })
   });
   const createJson = await createRes.json();
   if (createRes.ok && !createJson?.errors) return createJson.attributes;
 
-  // If already exists, look up by email
   const listRes = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/users?filter[email]=${encodeURIComponent(email)}`, {
-    headers: {
-      'Accept':'application/json',
-      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}`
-    }
+    headers: { 'Accept':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` }
   });
   const listJson = await listRes.json();
   const user = listJson?.data?.[0]?.attributes;
@@ -127,10 +103,7 @@ async function pteroCreateOrGetUser({ email, username, password }) {
 
 async function pteroGetEggStartup({ nestId, eggId }) {
   const res = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/nests/${nestId}/eggs/${eggId}`, {
-    headers: {
-      'Accept':'application/json',
-      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}`
-    }
+    headers: { 'Accept':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` }
   });
   if (!res.ok) throw new Error(`Pterodactyl egg error HTTP ${res.status}`);
   const json = await res.json();
@@ -140,41 +113,14 @@ async function pteroGetEggStartup({ nestId, eggId }) {
 async function pteroCreateServer({ userId, name, memo, cpu, eggId, startup, locId }) {
   const res = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/servers`, {
     method: 'POST',
-    headers: {
-      'Accept':'application/json',
-      'Content-Type':'application/json',
-      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}`
-    },
+    headers: { 'Accept':'application/json','Content-Type':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` },
     body: JSON.stringify({
-      name,
-      description: ' ',
-      user: userId,
-      egg: eggId,
-      docker_image: 'ghcr.io/parkervcp/yolks:nodejs_18',
+      name, description:' ', user:userId, egg:eggId, docker_image:'ghcr.io/parkervcp/yolks:nodejs_18',
       startup,
-      environment: {
-        INST: 'npm',
-        USER_UPLOAD: '0',
-        AUTO_UPDATE: '0',
-        CMD_RUN: 'npm start'
-      },
-      limits: {
-        memory: memo,
-        swap: 0,
-        disk: 0,
-        io: 500,
-        cpu: cpu
-      },
-      feature_limits: {
-        databases: 5,
-        backups: 5,
-        allocations: 1
-      },
-      deploy: {
-        locations: [locId],
-        dedicated_ip: false,
-        port_range: []
-      }
+      environment:{ INST:'npm', USER_UPLOAD:'0', AUTO_UPDATE:'0', CMD_RUN:'npm start' },
+      limits:{ memory:memo, swap:0, disk:0, io:500, cpu:cpu },
+      feature_limits:{ databases:5, backups:5, allocations:1 },
+      deploy:{ locations:[locId], dedicated_ip:false, port_range:[] }
     })
   });
   const json = await res.json();
@@ -185,12 +131,11 @@ async function pteroCreateServer({ userId, name, memo, cpu, eggId, startup, locI
   return json.attributes;
 }
 
-// --- API ---
+// --- API: Create order (username + paket only) ---
 app.post('/api/order', async (req, res) => {
   try {
-    const { username, nomor, paket } = req.body || {};
+    const { username, paket } = req.body || {};
     if (!isValidUsername(username)) return res.status(400).json({ ok:false, error:'Username 3–15 alfanumerik tanpa spasi' });
-    if (!isValidNomor(nomor)) return res.status(400).json({ ok:false, error:'Nomor harus diawali 62 dan angka' });
 
     const chosen = PAKET[String(paket).toLowerCase()];
     if (!chosen) return res.status(400).json({ ok:false, error:'Paket tidak dikenal' });
@@ -201,18 +146,12 @@ app.post('/api/order', async (req, res) => {
     const expiredAt = expiryTimestamp(6);
     const expiredTimeWIB = moment(expiredAt).tz(CONFIG.TIMEZONE).format('HH:mm');
 
-    // Create Atlantic QRIS
-    const payData = await atlanticCreateQRIS({
-      api_key: CONFIG.ATLANTIC_API_KEY,
-      reff_id: reffId,
-      nominal: price
-    });
-
+    const payData = await atlanticCreateQRIS({ api_key: CONFIG.ATLANTIC_API_KEY, reff_id: reffId, nominal: price });
     const qrPng = await QRCode.toDataURL(payData.qr_string, { margin: 2, scale: 8 });
 
     orders.set(orderId, {
       status: 'pending',
-      username, nomor, paket: String(paket).toLowerCase(),
+      username, paket: String(paket).toLowerCase(),
       price,
       reffId,
       atlanticId: payData.id,
@@ -223,91 +162,84 @@ app.post('/api/order', async (req, res) => {
       result: null
     });
 
-    return res.json({
-      ok:true,
-      orderId,
-      price,
-      expiredAt,
-      expiredTimeWIB,
-      qr_png: qrPng
-    });
+    return res.json({ ok:true, orderId, price, expiredAt, expiredTimeWIB, qr_png: qrPng });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ ok:false, error: e.message || 'server error' });
   }
 });
 
+// --- API: Get order status (poll) ---
 app.get('/api/order/:id/status', async (req, res) => {
   try {
     const id = req.params.id;
     const order = orders.get(id);
     if (!order) return res.status(404).json({ ok:false, error:'Order not found' });
 
-    // Check expiry
     if (Date.now() >= order.expiredAt && order.status === 'pending') {
       order.status = 'expired';
       return res.json({ ok:true, status:'expired' });
     }
 
-    if (order.status === 'success') {
-      return res.json({ ok:true, status:'success', result: order.result });
-    }
-    if (order.status === 'expired') {
-      return res.json({ ok:true, status:'expired' });
-    }
+    if (order.status === 'success') return res.json({ ok:true, status:'success', result: order.result });
+    if (order.status === 'expired') return res.json({ ok:true, status:'expired' });
+    if (order.status === 'cancelled') return res.json({ ok:true, status:'cancelled' });
 
-    // Pending: poll Atlantic
+    // Pending → poll payment
     const payStatus = await atlanticCheckStatus({ api_key: CONFIG.ATLANTIC_API_KEY, id: order.atlanticId });
     if (payStatus === 'success' && !order.processed) {
-      // Process: create panel
       order.processed = true;
       try {
         const email = `${order.username}@panel.com`;
         const password = `${order.username}001`;
         const name = `${order.username}${order.paket.toUpperCase()}`;
-
         const user = await pteroCreateOrGetUser({ email, username: order.username, password });
         const startup = await pteroGetEggStartup({ nestId: CONFIG.NEST_ID, eggId: CONFIG.EGG_ID });
         const chosen = PAKET[order.paket];
-
-        const server = await pteroCreateServer({
-          userId: user.id,
-          name,
-          memo: chosen.memo,
-          cpu: chosen.cpu,
-          eggId: CONFIG.EGG_ID,
-          startup,
-          locId: CONFIG.LOCATION_ID
-        });
+        const server = await pteroCreateServer({ userId: user.id, name, memo: chosen.memo, cpu: chosen.cpu, eggId: CONFIG.EGG_ID, startup, locId: CONFIG.LOCATION_ID });
 
         const waktuBuat = moment().tz(CONFIG.TIMEZONE).format('DD/MM/YYYY HH:mm');
         const waktuExpired = moment().add(30, 'days').tz(CONFIG.TIMEZONE).format('DD/MM/YYYY');
 
         order.status = 'success';
-        order.result = {
-          login: CONFIG.PTERO_DOMAIN,
-          username: user.username,
-          password,
-          memory: server.limits?.memory ?? chosen.memo,
-          cpu: server.limits?.cpu ?? chosen.cpu,
-          dibuat: waktuBuat,
-          expired: waktuExpired
-        };
+        order.result = { login: CONFIG.PTERO_DOMAIN, username: user.username, password, memory: server.limits?.memory ?? chosen.memo, cpu: server.limits?.cpu ?? chosen.cpu, dibuat: waktuBuat, expired: waktuExpired };
       } catch (err) {
         order.status = 'error';
         order.result = { error: err.message };
       }
     }
 
-    if (order.status === 'success') {
-      return res.json({ ok:true, status:'success', result: order.result });
-    }
-    if (order.status === 'error') {
-      return res.json({ ok:false, status:'error', error: order.result?.error || 'processing error' });
+    if (order.status === 'success') return res.json({ ok:true, status:'success', result: order.result });
+    if (order.status === 'error') return res.json({ ok:false, status:'error', error: order.result?.error || 'processing error' });
+
+    return res.json({ ok:true, status:'pending' });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ ok:false, error: e.message || 'server error' });
+  }
+});
+
+// --- API: Cancel order ---
+app.delete('/api/order/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const order = orders.get(id);
+    if (!order) return res.status(404).json({ ok:false, error:'Order tidak ditemukan' });
+    if (order.status !== 'pending') return res.status(400).json({ ok:false, error:'Order sudah diproses' });
+
+    order.status = 'cancelled';
+
+    // Optional: coba batalkan di Atlantic (abaikan error jika endpoint tidak ada)
+    try {
+      const body = new URLSearchParams();
+      body.append('api_key', CONFIG.ATLANTIC_API_KEY);
+      body.append('id', String(order.atlanticId));
+      await fetch('https://atlantich2h.com/deposit/cancel', { method: 'POST', body });
+    } catch (e) {
+      console.warn('Atlantic cancel gagal / tidak tersedia:', e.message);
     }
 
-    // still pending
-    return res.json({ ok:true, status:'pending' });
+    return res.json({ ok:true, message:'Order dibatalkan.' });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ ok:false, error: e.message || 'server error' });
