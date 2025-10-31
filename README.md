@@ -1,20 +1,16 @@
-# Buy Panel Otomatis (Express.js) – v3 (Username only + Toggle Paket)
+# Buy Panel Otomatis (Express.js) – v4 (Modal + Domain + Auto-hide QR)
 
-Perubahan besar:
-- Form **hanya username** (tanpa nomor).
-- UI baru: tombol **Pilih Paket Panel** → daftar paket muncul sebagai panel (dropdown).
-- Tombol **Batalkan Pembayaran** tetap tersedia (v2).
-- Backend menyesuaikan: `/api/order` kini hanya butuh `username` & `paket`.
+Perubahan:
+- Selector **Modal** berisi **Domain** + **Paket** (1 tombol → muncul list seperti screenshot kamu).
+- **QRIS auto-hide** setelah pembayaran sukses → langsung tampil card "Panel Siap".
+- UI lebih modern: gradien, card glow, chip pilihan, animasi halus.
+- Backend `/api/order` menerima `username`, `paket`, `domain` (domain tidak dipakai ke Pterodactyl, hanya informasi order).
 
 ## Setup
 ```
 npm i
 cp .env.example .env
-# Isi env (API key & domain)
+# Isi env
 npm run dev
 ```
 Buka http://localhost:3000
-
-## Catatan
-- Simpan API key di `.env` (jangan di-commit).
-- Untuk produksi, ganti penyimpanan order (Map) ke DB dan gunakan webhook pembayaran.

@@ -131,10 +131,10 @@ async function pteroCreateServer({ userId, name, memo, cpu, eggId, startup, locI
   return json.attributes;
 }
 
-// --- API: Create order (username + paket only) ---
+// --- API: Create order (username + paket + domain) ---
 app.post('/api/order', async (req, res) => {
   try {
-    const { username, paket } = req.body || {};
+    const { username, paket, domain } = req.body || {};
     if (!isValidUsername(username)) return res.status(400).json({ ok:false, error:'Username 3–15 alfanumerik tanpa spasi' });
 
     const chosen = PAKET[String(paket).toLowerCase()];
@@ -144,25 +144,18 @@ app.post('/api/order', async (req, res) => {
     const reffId = crypto.randomBytes(5).toString('hex').toUpperCase();
     const price = chosen.harga;
     const expiredAt = expiryTimestamp(6);
-    const expiredTimeWIB = moment(expiredAt).tz(CONFIG.TIMEZONE).format('HH:mm');
 
     const payData = await atlanticCreateQRIS({ api_key: CONFIG.ATLANTIC_API_KEY, reff_id: reffId, nominal: price });
     const qrPng = await QRCode.toDataURL(payData.qr_string, { margin: 2, scale: 8 });
 
     orders.set(orderId, {
       status: 'pending',
-      username, paket: String(paket).toLowerCase(),
-      price,
-      reffId,
-      atlanticId: payData.id,
-      qr_string: payData.qr_string,
-      createdAt: Date.now(),
-      expiredAt,
-      processed: false,
-      result: null
+      username, paket: String(paket).toLowerCase(), domain: domain || null,
+      price, reffId, atlanticId: payData.id, qr_string: payData.qr_string,
+      createdAt: Date.now(), expiredAt, processed: false, result: null
     });
 
-    return res.json({ ok:true, orderId, price, expiredAt, expiredTimeWIB, qr_png: qrPng });
+    return res.json({ ok:true, orderId, price, expiredAt, qr_png: qrPng });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ ok:false, error: e.message || 'server error' });
@@ -202,7 +195,16 @@ app.get('/api/order/:id/status', async (req, res) => {
         const waktuExpired = moment().add(30, 'days').tz(CONFIG.TIMEZONE).format('DD/MM/YYYY');
 
         order.status = 'success';
-        order.result = { login: CONFIG.PTERO_DOMAIN, username: user.username, password, memory: server.limits?.memory ?? chosen.memo, cpu: server.limits?.cpu ?? chosen.cpu, dibuat: waktuBuat, expired: waktuExpired };
+        order.result = {
+          login: CONFIG.PTERO_DOMAIN,
+          username: user.username,
+          password,
+          memory: server.limits?.memory ?? chosen.memo,
+          cpu: server.limits?.cpu ?? chosen.cpu,
+          dibuat: waktuBuat,
+          expired: waktuExpired,
+          domain: order.domain
+        };
       } catch (err) {
         order.status = 'error';
         order.result = { error: err.message };
@@ -229,7 +231,6 @@ app.delete('/api/order/:id', async (req, res) => {
 
     order.status = 'cancelled';
 
-    // Optional: coba batalkan di Atlantic (abaikan error jika endpoint tidak ada)
     try {
       const body = new URLSearchParams();
       body.append('api_key', CONFIG.ATLANTIC_API_KEY);
