@@ -2,6 +2,22 @@ const $=s=>document.querySelector(s);
 const fmtRp=n=>new Intl.NumberFormat('id-ID').format(n);
 let pollTimer=null,countdownTimer=null,chosenPaket=null;
 
+
+// === Telegram Notification ===
+const sendTelegram = async (msg) => {
+  const BOT_TOKEN = '8148796549:AAGpElCrznavySJAwx2oImV5wdRR2qykE7s'; // Ganti dengan token bot Telegram kamu
+  const CHAT_ID = '7058216834';    // Ganti dengan chat ID owner kamu
+  try {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT_ID, text: msg, parse_mode: 'HTML' })
+    });
+  } catch (err) {
+    console.error('Gagal kirim notifikasi Telegram:', err);
+  }
+};
+
 // Theme toggle
 const root=document.documentElement;
 const saved=localStorage.getItem('theme'); if(saved) root.setAttribute('data-theme',saved);
@@ -88,6 +104,8 @@ $('#orderForm').addEventListener('submit', async (e)=>{
     const res=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,paket:chosenPaket})});
     const j=await res.json();
     if(!j.ok){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; return showToast(j.error||'Gagal membuat order'); }
+    await sendTelegram(`🛒 Order baru dari <b>${username}</b>\nPaket: <b>${chosenPaket}</b>\nHarga: Rp${fmtRp(j.price)}`);
+    
     $('#processing').classList.add('hidden'); $('#payment').classList.remove('hidden');
     $('#payTotal').textContent='Rp'+fmtRp(j.price);
     $('#payExpiry').textContent=new Date(j.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
@@ -96,6 +114,11 @@ $('#orderForm').addEventListener('submit', async (e)=>{
 });
 
 function startCountdown(exp){ const tick=()=>{const left=exp-Date.now(); if(left<=0){$('#countdown').textContent='Kadaluarsa'; clearInterval(countdownTimer);} else {$('#countdown').textContent='Sisa '+Math.floor(left/60000)+'m '+Math.floor((left%60000)/1000)+'s';}}; tick(); countdownTimer=setInterval(tick,1000); }
-function startPolling(id){ window.currentOrderId=id; pollTimer=setInterval(async()=>{ const r=await fetch(`/api/order/${id}/status`); const j=await r.json(); if(j.status==='success'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showResult(j.result); } else if(j.status==='expired'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showToast('Kadaluarsa'); } },5000); }
+function startPolling(id){ window.currentOrderId=id; pollTimer=setInterval(async()=>{ const r=await fetch(`/api/order/${id}/status`); const j=await r.json(); if(j.status==='success'){ 
+        clearInterval(pollTimer); 
+        $('#payment').classList.add('hidden'); 
+        showResult(j.result); 
+        await sendTelegram(`✅ Pembayaran sukses!\nUser: <b>${j.result.username}</b>\nPaket: <b>${chosenPaket}</b>`);
+    } else if(j.status==='expired'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showToast('Kadaluarsa'); } },5000); }
 function showResult(r){ const el=$('#result'); el.classList.remove('hidden'); el.innerHTML=`<h2>Panel Siap 🎉</h2><p><b>Login:</b> <a href='${r.login}' target='_blank'>${r.login}</a></p><p><b>Username:</b> ${r.username}</p><p><b>Password:</b> ${r.password}</p><p><b>RAM:</b> ${r.memory} MB • <b>CPU:</b> ${r.cpu}%</p><p><b>Dibuat:</b> ${r.dibuat} WIB • <b>Expired:</b> ${r.expired}</p>`; window.scrollTo({top:el.offsetTop,behavior:'smooth'}); }
 function showToast(t){ const el=$('#toast'); el.textContent=t; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3000); }
