@@ -5,20 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Buy Panel Otomatis</title>
   <link rel="stylesheet" href="/styles.css">
-  <style>
-    .promo-image {
-      width: 100%;
-      max-width: 400px;
-      border-radius: 16px;
-      margin: 20px auto;
-      display: block;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      transition: transform 0.3s ease;
-    }
-    .promo-image:hover {
-      transform: scale(1.05);
-    }
-  </style>
 </head>
 <body>
   <header class="hero">
@@ -31,9 +17,6 @@
       <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
     </div>
   </header>
-
-  <!-- Gambar promo -->
-  <img src="https://files.catbox.moe/ekzjc8.jpg" alt="Promo Panel Otomatis" class="promo-image">
 
   <div class="container">
     <form id="orderForm" class="card fade-in">
@@ -51,6 +34,7 @@
       </div>
 
       <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
+
       <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
     </form>
 
