@@ -7,56 +7,55 @@
   <link rel="stylesheet" href="/styles.css">
 
   <style>
-/* FIX POPUP CENTER RESPONSIVE — MOBILE / PC */
+
+  /* ====== MODAL PUSAT SEMPURNA ====== */
+
 .modal {
   position: fixed;
   inset: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: center;      /* tengah horizontal */
+  align-items: center;          /* tengah vertical */
   z-index: 9999;
-  backdrop-filter: blur(3px);
+
+  /* blur + darken */
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
 }
 
+.modal.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Kartu modal */
 .modal-card {
-  max-width: 95%;
-  width: 420px;
   background: var(--card-bg, #111827);
-  border-radius: 14px;
+  width: 90%;
+  max-width: 420px;
+  border-radius: 16px;
   padding: 20px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+
+  /* animasi */
   transform: scale(0.92);
   opacity: 0;
-  transition: 0.18s ease;
-  
-  /* supaya tetap di tengah di mobile panjang */
-  position: relative;
-  top: 0;
+  transition: .18s ease;
 }
 
-/* Saat modal muncul → smooth fade & scale */
 .modal.show .modal-card {
+  opacity: 1;
   transform: scale(1);
-  opacity: 1;
 }
 
-/* Backdrop fade in */
-.modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  opacity: 0;
-  transition: 0.18s ease;
-}
-
-.modal.show .modal-backdrop {
-  opacity: 1;
-}
-
-/* Mobile optimization */
+/* Mobile */
 @media (max-width: 480px) {
   .modal-card {
-    max-width: 90%;
-    width: 90%;
+    width: 88%;
   }
 }
   </style>
