@@ -56,20 +56,60 @@
       font-size: .95rem;    
     }
 
-    /* ===== FLOATING CONTACT BUTTON ===== */
-    .floating-contact {
+
+    /* ===========================
+       FLOATING BUTTON GROUP
+    ============================ */
+    .floating-wrapper {
       position: fixed;
       right: 18px;
       bottom: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
       z-index: 999;
     }
 
+    .floating-main {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      background: #ffffffdd;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.25);
+      cursor: pointer;
+      transition: 0.25s;
+    }
+
+    .floating-main img {
+      width: 34px;
+      height: 34px;
+    }
+
+    .floating-main:hover {
+      transform: scale(1.1);
+    }
+
+    .floating-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(15px);
+      transition: 0.3s ease;
+    }
+
+    .floating-options.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
     .contact-btn {
-      width: 58px;
-      height: 58px;
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
       background: #ffffffdd;
       display: flex;
@@ -81,14 +121,15 @@
     }
 
     .contact-btn img {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
     }
 
     .contact-btn:hover {
-      transform: scale(1.08);
+      transform: scale(1.1);
       background: #ffffff;
     }
+
   </style>  
 </head>
 
@@ -212,15 +253,32 @@
   <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>    
   <script src="/app.js"></script>  
 
-  <!-- FLOATING BUTTON WA & TELEGRAM -->
-  <div class="floating-contact">
-    <a href="https://wa.me/6285143569860" class="contact-btn">
-      <img src="https://files.catbox.moe/j0d5qh.png" alt="WA">
-    </a>
-    <a href="https://t.me/Ryuuen3" class="contact-btn">
-      <img src="https://files.catbox.moe/0o39n0.png" alt="Telegram">
-    </a>
+
+  <!-- ===========================
+        FLOATING CONTACT BUTTON
+     =========================== -->
+  <div class="floating-wrapper">
+
+    <div class="floating-options" id="contactOptions">
+      <a href="https://wa.me/6285143569860" class="contact-btn">
+        <img src="https://files.catbox.moe/j0d5qh.png" alt="WA">
+      </a>
+
+      <a href="https://t.me/Ryuuen3" class="contact-btn">
+        <img src="https://files.catbox.moe/0o39n0.png" alt="Telegram">
+      </a>
+    </div>
+
+    <div class="floating-main" onclick="toggleContact()">
+      <img src="https://files.catbox.moe/6hx7lx.png" alt="Contact">
+    </div>
   </div>
+
+  <script>
+    function toggleContact() {
+      document.getElementById("contactOptions").classList.toggle("show");
+    }
+  </script>
 
 </body>    
 </html>
