@@ -5,8 +5,8 @@ let currentOrderData = JSON.parse(localStorage.getItem('currentOrderState') || '
 
 // === Telegram Notification ===
 const sendTelegram = async (msg) => {
-  const BOT_TOKEN = '8148796549:AAGpElCrznavySJAwx2oImV5wdRR2qykE7s'; // Ganti dengan token bot Telegram kamu
-  const CHAT_ID = '7058216834';    // Ganti dengan chat ID owner kamu
+  const BOT_TOKEN = '8148796549:AAGpElCrznavySJAwx2oImV5wdRR2qykE7s'; 
+  const CHAT_ID = '7058216834';    
   try {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
@@ -29,30 +29,38 @@ function clearOrderState() {
     if (countdownTimer) clearInterval(countdownTimer);
     currentOrderData = null;
     localStorage.removeItem('currentOrderState');
+    
+    // Reset UI
     $('#qrcode').src='';
     $('#payment').classList.add('hidden');
     $('#result').classList.add('hidden');
     $('#historyBtn').classList.add('hidden');
+    $('#submitBtn').disabled = false;
+    $('#openSelector').disabled = false;
     $('#orderForm').scrollIntoView({behavior:'smooth'});
 }
 
 async function loadOrderState() {
-    if (!currentOrderData || currentOrderData.status === 'success' || currentOrderData.status === 'expired') {
+    // Jika tidak ada data atau status sudah selesai/expired, reset dan keluar
+    if (!currentOrderData || currentOrderData.status === 'success' || currentOrderData.status === 'expired' || currentOrderData.status === 'cancelled') {
         clearOrderState();
         return;
     }
     
     // Jika ada order yang belum selesai (status pending)
     const { orderId, exp, qrPng, price, chosenPaket: savedPaket } = currentOrderData;
+    
     window.currentOrderId = orderId;
-    chosenPaket = savedPaket; // Restore paket
+    chosenPaket = savedPaket; // <-- Fix: Restore chosenPaket
     
     // Set form dan UI
     const p = PAKET.find(x => x.key === savedPaket);
     if (p) {
-        $('#chosenBox').classList.remove('hidden'); $('#chosenBox').textContent = p.label;
+        $('#chosenBox').classList.remove('hidden'); 
+        $('#chosenBox').textContent = p.label;
         $('#submitBtn').disabled = true; 
         $('#openSelector').disabled = true; // Kunci selector saat order aktif
+        $('#seePrice').classList.remove('hidden'); // Tampilkan lihat harga
     }
 
     // Tampilkan tombol riwayat
@@ -65,9 +73,10 @@ async function loadOrderState() {
     if (j.status === 'success') {
         showResult(j.result);
         saveOrderState(orderId, exp, qrPng, price, 'success');
+        clearOrderState(); // Bersihkan UI/Logic setelah sukses
     } else if (j.status === 'expired' || Date.now() >= exp) {
         showToast('Pembayaran sebelumnya kadaluarsa.');
-        saveOrderState(orderId, exp, qrPng, price, 'expired');
+        clearOrderState(); 
     } else if (j.status === 'pending') {
         // Lanjutkan polling dan countdown
         $('#payment').classList.remove('hidden');
@@ -76,7 +85,10 @@ async function loadOrderState() {
         $('#qrcode').src = qrPng;
         startCountdown(exp);
         startPolling(orderId);
-        showToast('Status order dimuat ulang.');
+        showToast('Status order dimuat ulang. Sisa waktu dilanjutkan.');
+    } else {
+        // Jika status lain (error/cancel dari server)
+        clearOrderState();
     }
 }
 
@@ -127,7 +139,7 @@ $('#clearChoice').addEventListener('click',()=>{
   chosenPaket=null; document.querySelectorAll('#paketList input').forEach(r=>r.checked=false); $('#applyChoice').disabled=true;
 });
 $('#applyChoice').addEventListener('click',()=>{
-  const current=document.querySelector('input[name=paket}:checked'); chosenPaket=current?current.value:chosenPaket;
+  const current=document.querySelector('input[name=paket]:checked'); chosenPaket=current?current.value:chosenPaket;
   if(!chosenPaket) return;
   const p=PAKET.find(x=>x.key===chosenPaket);
   $('#chosenBox').classList.remove('hidden'); $('#chosenBox').textContent=p.label;
@@ -141,10 +153,10 @@ const playSound=(id)=>{ const el=$(id); if(el){ el.currentTime=0; el.play().catc
 // Price popup
 function showPricePopup(){
   const p=PAKET.find(x=>x.key===chosenPaket); if(!p) return;
-  // Menampilkan harga dasar dan fee/total harga dari state jika sudah ada order aktif
+  // Menampilkan harga dasar atau total harga dari state yang aktif
   const priceDisplay = currentOrderData && currentOrderData.status === 'pending'
-    ? `<p><b>Total Bayar:</b> Rp${fmtRp(currentOrderData.price)}</p>`
-    : `<p><b>Harga Dasar:</b> Rp${fmtRp(p.harga)}</p><p class="muted">Fee akan ditambahkan saat QRIS dibuat.</p>`;
+    ? `<p><b>Total Bayar:</b> Rp${fmtRp(currentOrderData.price)}</p><p class="muted">Sudah termasuk biaya admin.</p>`
+    : `<p><b>Harga Dasar:</b> Rp${fmtRp(p.harga)}</p><p class="muted">Biaya admin akan ditambahkan saat QRIS dibuat.</p>`;
 
   $('#priceDetail').innerHTML=`${priceDisplay}<p><b>Paket:</b> ${p.key.toUpperCase()} / CPU ${p.cpu}%</p>`;
   playSound('#ding'); $('#priceModal').classList.remove('hidden');
@@ -158,14 +170,14 @@ $('#noCancel').addEventListener('click', ()=> $('#confirmCancel').classList.add(
 $('#yesCancel').addEventListener('click', async ()=>{
   $('#confirmCancel').classList.add('hidden');
   try{ 
-    if(window.currentOrderId){ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); } 
+    if(window.currentOrderId){ 
+      await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); 
+      showToast('Permintaan pembatalan dikirim ke server.');
+    } 
   }catch{}
   
   clearOrderState(); // Bersihkan state lokal
-  $('#submitBtn').disabled = false;
-  $('#openSelector').disabled = false;
   showToast('Pembayaran dibatalkan. Form siap digunakan.'); 
-  $('#orderForm').scrollIntoView({behavior:'smooth'});
 });
 
 // Submit
@@ -225,9 +237,8 @@ function startCountdown(exp){
             $('#countdown').textContent='Kadaluarsa'; 
             clearInterval(countdownTimer);
             // Panggil clear state jika kadaluarsa
+            showToast('Pembayaran kadaluarsa.');
             clearOrderState(); 
-            $('#submitBtn').disabled=false;
-            $('#openSelector').disabled=false;
         } else {
             $('#countdown').textContent='Sisa '+Math.floor(left/60000)+'m '+Math.floor((left%60000)/1000)+'s';
         }
@@ -248,16 +259,13 @@ function startPolling(id){
             $('#payment').classList.add('hidden'); 
             showResult(j.result); 
             saveOrderState(id, currentOrderData.exp, currentOrderData.qrPng, currentOrderData.price, 'success');
-            $('#submitBtn').disabled=false;
-            $('#openSelector').disabled=false;
+            clearOrderState(); // Setelah sukses, hapus dari pending
             await sendTelegram(`✅ Pembayaran sukses!\nUser: <b>${j.result.username}</b>\nPaket: <b>${currentOrderData.chosenPaket}</b>`);
-        } else if(j.status==='expired'){ 
+        } else if(j.status==='expired' || j.status==='cancelled'){ 
             clearInterval(pollTimer); 
             $('#payment').classList.add('hidden'); 
-            showToast('Kadaluarsa'); 
+            showToast(j.status === 'expired' ? 'Pembayaran Kadaluarsa' : 'Pembayaran Dibatalkan'); 
             clearOrderState(); 
-            $('#submitBtn').disabled=false;
-            $('#openSelector').disabled=false;
         } 
     },5000); 
 }
@@ -281,12 +289,11 @@ $('#historyBtn').addEventListener('click', () => {
     if (currentOrderData && currentOrderData.status === 'pending') {
         $('#payment').classList.remove('hidden');
         $('#payment').scrollIntoView({behavior:'smooth'});
-    } else if (currentOrderData && currentOrderData.status === 'success') {
-        // Coba load ulang result dari server, atau tampilkan pesan jika result hilang.
-        showToast("Pesanan ini sudah sukses. Detailnya ada di halaman.");
+        showToast("Melanjutkan pembayaran aktif.");
     } else {
-        showToast("Tidak ada riwayat pembelian aktif.");
+        // Ini tidak seharusnya terjadi jika loadOrderState benar
+        showToast("Tidak ada riwayat pembelian aktif yang belum selesai.");
         clearOrderState();
     }
 });
-  
+    
