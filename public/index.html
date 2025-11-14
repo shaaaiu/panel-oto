@@ -5,7 +5,28 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Buy Panel Otomatis</title>
   <link rel="stylesheet" href="/styles.css">
+
+  <style>
+    /* --- SMOOTH MODAL ANIMATION --- */
+    .modal-card {
+      transform: scale(0.92);
+      opacity: 0;
+      transition: 0.18s ease;
+    }
+    .modal.show .modal-card {
+      transform: scale(1);
+      opacity: 1;
+    }
+    .modal-backdrop {
+      opacity: 0;
+      transition: 0.18s ease;
+    }
+    .modal.show .modal-backdrop {
+      opacity: 1;
+    }
+  </style>
 </head>
+
 <body>
   <header class="hero">
     <div class="hero-content">
@@ -35,10 +56,14 @@
 
       <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
 
-      <!-- tombol area: submit + history -->
-      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
-        <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
-        <button type="button" id="historyBtn" class="secondary" title="Cek Riwayat Pembelian">Cek Riwayat Pembelian</button>
+      <div style="display:flex; gap:10px; width:100%; margin-top:14px;">
+        <button type="submit" class="primary" id="submitBtn" style="flex:1;" disabled>Buat QRIS & Order</button>
+
+        <button type="button" class="secondary" id="refreshFormBtn" style="flex:1;">Refresh Input</button>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button type="button" id="historyBtn" class="secondary" style="width:100%;">Cek Riwayat Pembelian</button>
       </div>
     </form>
 
@@ -49,10 +74,13 @@
     <div id="payment" class="card hidden fade-in">
       <h2>Scan & Bayar</h2>
       <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
+
       <div class="qr-wrapper">
         <img id="qrcode" alt="QRIS" />
       </div>
+
       <p id="countdown" class="muted"></p>
+
       <button id="cancelBtn" class="danger" type="button">Batalkan Pembayaran</button>
     </div>
 
@@ -61,63 +89,84 @@
   </div>
 
   <!-- Modal Pilih Paket -->
-  <div class="modal hidden" id="selectorModal" aria-modal="true" role="dialog">
+  <div class="modal hidden" id="selectorModal">
     <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="document">
+    <div class="modal-card">
       <div class="modal-head">
         <h3>Pilih Paket Panel</h3>
-        <button class="icon" id="closeModal" aria-label="Tutup">✕</button>
+        <button class="icon" id="closeModal">✕</button>
       </div>
+
       <div class="modal-body" id="paketList"></div>
+
       <div class="modal-foot">
-        <button class="secondary" id="clearChoice" type="button">Reset</button>
-        <button class="primary" id="applyChoice" type="button" disabled>Simpan Pilihan</button>
+        <button class="secondary" id="clearChoice">Reset</button>
+        <button class="primary" id="applyChoice" disabled>Simpan Pilihan</button>
       </div>
     </div>
   </div>
 
   <!-- Modal Harga -->
-  <div class="modal hidden" id="priceModal" aria-modal="true" role="dialog">
+  <div class="modal hidden" id="priceModal">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card modal-futuristic">
       <h3>💰 Detail Paket</h3>
       <div id="priceDetail" class="price-detail"></div>
-      <button class="primary" id="closePrice" type="button">OK</button>
+      <button class="primary" id="closePrice">OK</button>
     </div>
   </div>
 
   <!-- Modal Konfirmasi Batal -->
-  <div class="modal hidden" id="confirmCancel" aria-modal="true" role="dialog">
-    <div class="modal-backdrop" data-close="true"></div>
+  <div class="modal hidden" id="confirmCancel">
+    <div class="modal-backdrop"></div>
     <div class="modal-card modal-futuristic">
       <h3>❓ Batalkan Pembayaran?</h3>
+
       <p>Apakah kamu yakin ingin membatalkan pembayaran ini?</p>
+
       <div class="modal-actions">
-        <button class="secondary" id="noCancel" type="button">Tidak</button>
-        <button class="danger" id="yesCancel" type="button">Ya, Batalkan</button>
+        <button class="secondary" id="noCancel">Tidak</button>
+        <button class="danger" id="yesCancel">Ya, Batalkan</button>
       </div>
     </div>
   </div>
 
   <!-- Modal Riwayat Pembelian -->
-  <div class="modal hidden" id="historyModal" aria-modal="true" role="dialog">
-    <div class="modal-backdrop" data-close="true"></div>
-    <div class="modal-card" role="document">
+  <div class="modal hidden" id="historyModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
       <div class="modal-head">
-        <h3>📜 Riwayat Pembelian (per device)</h3>
-        <button class="icon" id="closeHistory" aria-label="Tutup">✕</button>
+        <h3>📜 Riwayat Pembelian</h3>
+        <button class="icon" id="closeHistory">✕</button>
       </div>
-      <div class="modal-body" id="historyList">
-        <!-- list akan di-render oleh JS -->
-      </div>
+
+      <div class="modal-body" id="historyList"></div>
+
       <div class="modal-foot">
-        <button class="secondary" id="clearAllHistory" type="button">Hapus Semua</button>
-        <button class="primary" id="closeHistoryOk" type="button">OK</button>
+        <button class="secondary" id="clearAllHistory">Hapus Semua</button>
+        <button class="primary" id="closeHistoryOk">OK</button>
       </div>
     </div>
   </div>
 
-  <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
+  <audio id="ding"
+    src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
+
   <script src="/app.js"></script>
+
+  <script>
+    function openModalSmooth(id) {
+      const modal = document.getElementById(id);
+      modal.classList.remove("hidden");
+      setTimeout(() => modal.classList.add("show"), 10);
+    }
+
+    function closeModalSmooth(id) {
+      const modal = document.getElementById(id);
+      modal.classList.remove("show");
+      setTimeout(() => modal.classList.add("hidden"), 180);
+    }
+  </script>
+
 </body>
-        </html>
+</html>
