@@ -37,8 +37,6 @@
 
       <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
     </form>
-    
-    <button id="historyBtn" class="secondary wide hidden" type="button">Lihat Riwayat Pembelian Aktif</button>
 
     <div id="processing" class="card hidden">
       <p id="processingText">🔄 Memproses... harap tunggu QRIS muncul.</p>
@@ -58,6 +56,7 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
+  <!-- Modal Pilih Paket -->
   <div class="modal hidden" id="selectorModal" aria-modal="true" role="dialog">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card" role="document">
@@ -73,6 +72,7 @@
     </div>
   </div>
 
+  <!-- Modal Harga -->
   <div class="modal hidden" id="priceModal" aria-modal="true" role="dialog">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card modal-futuristic">
@@ -82,6 +82,7 @@
     </div>
   </div>
 
+  <!-- Modal Konfirmasi Batal -->
   <div class="modal hidden" id="confirmCancel" aria-modal="true" role="dialog">
     <div class="modal-backdrop" data-close="true"></div>
     <div class="modal-card modal-futuristic">
