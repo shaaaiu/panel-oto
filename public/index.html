@@ -6,58 +6,51 @@
   <title>Buy Panel Otomatis</title>
   <link rel="stylesheet" href="/styles.css">
 
+  <!-- FIX POPUP CENTER PERFECT -->
   <style>
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
 
-  /* ====== MODAL PUSAT SEMPURNA ====== */
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
 
-.modal {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  justify-content: center;      /* tengah horizontal */
-  align-items: center;          /* tengah vertical */
-  z-index: 9999;
+    .modal.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
 
-  /* blur + darken */
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(4px);
+    .modal-card {
+      width: 90%;
+      max-width: 420px;
+      background: var(--card-bg, #111827);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
 
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .18s ease;
-}
+      transform: scale(0.92);
+      opacity: 0;
+      transition: .18s ease;
+    }
 
-.modal.show {
-  opacity: 1;
-  pointer-events: auto;
-}
+    .modal.show .modal-card {
+      opacity: 1;
+      transform: scale(1);
+    }
 
-/* Kartu modal */
-.modal-card {
-  background: var(--card-bg, #111827);
-  width: 90%;
-  max-width: 420px;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
-
-  /* animasi */
-  transform: scale(0.92);
-  opacity: 0;
-  transition: .18s ease;
-}
-
-.modal.show .modal-card {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* Mobile */
-@media (max-width: 480px) {
-  .modal-card {
-    width: 88%;
-  }
-}
+    @media (max-width: 480px) {
+      .modal-card {
+        width: 88%;
+      }
+    }
   </style>
 </head>
 
@@ -90,14 +83,9 @@
 
       <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
 
-      <div style="display:flex; gap:10px; width:100%; margin-top:14px;">
-        <button type="submit" class="primary" id="submitBtn" style="flex:1;" disabled>Buat QRIS & Order</button>
-
-        <button type="button" class="secondary" id="refreshFormBtn" style="flex:1;">Refresh Input</button>
-      </div>
-
-      <div style="margin-top:12px;">
-        <button type="button" id="historyBtn" class="secondary" style="width:100%;">Cek Riwayat Pembelian</button>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+        <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
+        <button type="button" id="historyBtn" class="secondary">Cek Riwayat Pembelian</button>
       </div>
     </form>
 
@@ -108,13 +96,10 @@
     <div id="payment" class="card hidden fade-in">
       <h2>Scan & Bayar</h2>
       <p>Total: <b id="payTotal"></b> • Kadaluarsa: <b id="payExpiry"></b> WIB</p>
-
       <div class="qr-wrapper">
         <img id="qrcode" alt="QRIS" />
       </div>
-
       <p id="countdown" class="muted"></p>
-
       <button id="cancelBtn" class="danger" type="button">Batalkan Pembayaran</button>
     </div>
 
@@ -123,16 +108,13 @@
   </div>
 
   <!-- Modal Pilih Paket -->
-  <div class="modal hidden" id="selectorModal">
-    <div class="modal-backdrop" data-close="true"></div>
+  <div class="modal" id="selectorModal">
     <div class="modal-card">
       <div class="modal-head">
         <h3>Pilih Paket Panel</h3>
         <button class="icon" id="closeModal">✕</button>
       </div>
-
       <div class="modal-body" id="paketList"></div>
-
       <div class="modal-foot">
         <button class="secondary" id="clearChoice">Reset</button>
         <button class="primary" id="applyChoice" disabled>Simpan Pilihan</button>
@@ -141,8 +123,7 @@
   </div>
 
   <!-- Modal Harga -->
-  <div class="modal hidden" id="priceModal">
-    <div class="modal-backdrop" data-close="true"></div>
+  <div class="modal" id="priceModal">
     <div class="modal-card modal-futuristic">
       <h3>💰 Detail Paket</h3>
       <div id="priceDetail" class="price-detail"></div>
@@ -151,31 +132,25 @@
   </div>
 
   <!-- Modal Konfirmasi Batal -->
-  <div class="modal hidden" id="confirmCancel">
-    <div class="modal-backdrop"></div>
+  <div class="modal" id="confirmCancel">
     <div class="modal-card modal-futuristic">
       <h3>❓ Batalkan Pembayaran?</h3>
-
       <p>Apakah kamu yakin ingin membatalkan pembayaran ini?</p>
-
       <div class="modal-actions">
-        <button class="secondary" id="noCancel">Tidak</button>
-        <button class="danger" id="yesCancel">Ya, Batalkan</button>
+        <button class="secondary" id="noCancel" type="button">Tidak</button>
+        <button class="danger" id="yesCancel" type="button">Ya, Batalkan</button>
       </div>
     </div>
   </div>
 
   <!-- Modal Riwayat Pembelian -->
-  <div class="modal hidden" id="historyModal">
-    <div class="modal-backdrop"></div>
+  <div class="modal" id="historyModal">
     <div class="modal-card">
       <div class="modal-head">
-        <h3>📜 Riwayat Pembelian</h3>
+        <h3>📜 Riwayat Pembelian (per device)</h3>
         <button class="icon" id="closeHistory">✕</button>
       </div>
-
       <div class="modal-body" id="historyList"></div>
-
       <div class="modal-foot">
         <button class="secondary" id="clearAllHistory">Hapus Semua</button>
         <button class="primary" id="closeHistoryOk">OK</button>
@@ -183,23 +158,22 @@
     </div>
   </div>
 
-  <audio id="ding"
-    src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
-
+  <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>
   <script src="/app.js"></script>
 
+  <!-- MODAL FUNCTION FIX -->
   <script>
     function openModalSmooth(id) {
-  const modal = document.getElementById(id);
-  document.body.style.overflow = "hidden"; // stop scroll
-  modal.classList.add("show");
-}
+      const modal = document.getElementById(id);
+      document.body.style.overflow = "hidden";
+      modal.classList.add("show");
+    }
 
-function closeModalSmooth(id) {
-  const modal = document.getElementById(id);
-  document.body.style.overflow = "";
-  modal.classList.remove("show");
-}
+    function closeModalSmooth(id) {
+      const modal = document.getElementById(id);
+      document.body.style.overflow = "";
+      modal.classList.remove("show");
+    }
   </script>
 
 </body>
