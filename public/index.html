@@ -5,23 +5,59 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Buy Panel Otomatis</title>
   <link rel="stylesheet" href="/styles.css">
+
+  <style>
+    /* Header lebih rapih */
+    .new-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 8px;
+    }
+
+    /* LOGO KECIL & BULAT */
+    .store-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #ffffff22;
+      box-shadow: 0 0 10px rgba(0,0,0,0.25);
+    }
+
+    .header-text {
+      flex: 1;
+    }
+
+    .header-text h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+    }
+
+    .header-text p {
+      margin: 3px 0 0;
+      opacity: .9;
+      font-size: .95rem;
+    }
+  </style>
+
 </head>
 <body>
 
   <!-- HEADER BARU -->
   <header class="hero">
     <div class="hero-content new-header">
-      
-      <!-- LOGO TOKO -->
+
+      <!-- LOGO TOKO (otomatis kecil & bulat) -->
       <img src="https://files.catbox.moe/ekzjc8.jpg" class="store-logo" alt="Logo Store">
 
-      <!-- TITLE + SUBTITLE -->
       <div class="header-text">
         <h1>Buy Panel Otomatis</h1>
         <p>Pilih paket, bayar via QRIS, panel langsung dibuat otomatis ⚡</p>
       </div>
 
-      <!-- TOGGLE MODE -->
       <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
     </div>
   </header>
@@ -47,7 +83,6 @@
       <div class="button-row" style="margin-top:16px;">
         <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
 
-        <!-- Refresh Input (style disamakan) -->
         <button type="button" id="refreshFormBtn" class="secondary large">
           Refresh Input
         </button>
