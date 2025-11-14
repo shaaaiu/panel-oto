@@ -20,7 +20,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Config (from .env) ---
 const CONFIG = {
-  ATLANTIC_API_KEY: process.env.ATLANTIC_API_KEY,
+  // Ganti kunci API Atlantic dengan Requime
+  REQUIME_API_KEY: process.env.REQUIME_API_KEY,
+  // Tambahkan rate pajak (misal: 0.01 untuk 1%)
+  TAX_RATE: parseFloat(process.env.TAX_RATE || '0.01'), 
+  
   PTERO_DOMAIN: process.env.PTERO_DOMAIN,
   PTERO_APP_KEY: process.env.PTERO_APP_KEY,
   EGG_ID: parseInt(process.env.PTERO_EGG_ID || '15', 10),
@@ -33,7 +37,7 @@ const CONFIG = {
 // --- Simple in-memory store (use DB for production) ---
 const orders = new Map(); // id -> { ... }
 
-// Paket mapping
+// Paket mapping (Harga adalah harga dasar sebelum pajak)
 const PAKET = {
   '1gb':  { harga: 2000,  memo: 1048,  cpu: 30  },
   '2gb':  { harga: 3000,  memo: 2048,  cpu: 50  },
@@ -51,31 +55,79 @@ const PAKET = {
 function isValidUsername(u) { return /^[a-zA-Z0-9]{3,15}$/.test(u); }
 function expiryTimestamp(minutes=6) { return Date.now() + minutes*60*1000; }
 
-async function atlanticCreateQRIS({ api_key, reff_id, nominal }) {
-  const body = new URLSearchParams();
-  body.append('api_key', api_key);
-  body.append('reff_id', reff_id);
-  body.append('nominal', String(nominal));
-  body.append('type', 'ewallet');
-  body.append('metode', 'qrisfast');
-  const res = await fetch('https://atlantich2h.com/deposit/create', { method:'POST', body });
-  if (!res.ok) throw new Error(`Atlantic create error HTTP ${res.status}`);
+// --- Helper API RequimeBoost ---
+
+/**
+ * Membuat QRIS via RequimeBoost
+ * Menggunakan format JSON
+ */
+async function requimeCreateQRIS({ api_key, reff_id, nominal }) {
+  const body = {
+    api_key,
+    reff_id,
+    nominal: String(nominal),
+    metode: 'qris'
+  };
+  const res = await fetch('https://requimeboost.id/api/h2h/deposit/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`Requime create error HTTP ${res.status}`);
   const json = await res.json();
-  if (!json.status) throw new Error(`Atlantic create error: ${json.message || 'unknown'}`);
-  return json.data;
+  if (!json.success || !json.data) {
+    throw new Error(`Requime create error: ${json.message || 'unknown'}`);
+  }
+  return json.data; // Mengembalikan { id, qr_content, expired, ... }
 }
 
-async function atlanticCheckStatus({ api_key, id }) {
-  const body = new URLSearchParams();
-  body.append('api_key', api_key);
-  body.append('id', String(id));
-  const res = await fetch('https://atlantich2h.com/deposit/status', { method:'POST', body });
-  if (!res.ok) throw new Error(`Atlantic status error HTTP ${res.status}`);
+/**
+ * Cek Status Deposit RequimeBoost
+ * Menggunakan format JSON
+ */
+async function requimeCheckStatus({ api_key, id }) {
+  const body = {
+    api_key,
+    id: String(id)
+  };
+  const res = await fetch('https://requimeboost.id/api/h2h/deposit/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`Requime status error HTTP ${res.status}`);
   const json = await res.json();
+  // Jika API call sukses tapi data tidak ada, anggap pending
   return json?.data?.status || 'pending';
 }
 
-// Pterodactyl helpers
+/**
+ * Batalkan Deposit RequimeBoost
+ * Menggunakan format JSON
+ */
+async function requimeCancelDeposit({ api_key, id }) {
+    const body = {
+      api_key,
+      id: String(id)
+    };
+    const res = await fetch('https://requimeboost.id/api/h2h/deposit/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    // Tidak melempar error jika gagal, cukup log di console
+    if (!res.ok) {
+        console.warn(`Requime cancel warning: HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    if (!json.success) {
+        console.warn(`Requime cancel warning: ${json.message || 'Failed to cancel'}`);
+    }
+    return json;
+}
+
+// --- Helper Pterodactyl (Tidak Berubah) ---
+
 async function pteroCreateOrGetUser({ email, username, password }) {
   const createRes = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/users`, {
     method: 'POST',
@@ -142,20 +194,48 @@ app.post('/api/order', async (req, res) => {
 
     const orderId = crypto.randomBytes(6).toString('hex').toUpperCase();
     const reffId = crypto.randomBytes(5).toString('hex').toUpperCase();
-    const price = chosen.harga;
-    const expiredAt = expiryTimestamp(6);
+    
+    // Hitung harga dasar, pajak, dan total
+    const basePrice = chosen.harga;
+    const tax = Math.floor(basePrice * CONFIG.TAX_RATE);
+    const totalPrice = basePrice + tax;
+    
+    const expiredAt = expiryTimestamp(6); // 6 menit untuk order timeout
 
-    const payData = await atlanticCreateQRIS({ api_key: CONFIG.ATLANTIC_API_KEY, reff_id: reffId, nominal: price });
-    const qrPng = await QRCode.toDataURL(payData.qr_string, { margin: 2, scale: 8 });
+    // Panggil helper Requime
+    const payData = await requimeCreateQRIS({ 
+        api_key: CONFIG.REQUIME_API_KEY, 
+        reff_id: reffId, 
+        nominal: totalPrice // Kirim total harga (termasuk pajak)
+    });
+    
+    // Gunakan qr_content dari Requime
+    const qrPng = await QRCode.toDataURL(payData.qr_content, { margin: 2, scale: 8 });
 
     orders.set(orderId, {
       status: 'pending',
       username, paket: String(paket).toLowerCase(), domain: domain || null,
-      price, reffId, atlanticId: payData.id, qr_string: payData.qr_string,
-      createdAt: Date.now(), expiredAt, processed: false, result: null
+      basePrice, tax, totalPrice, // Simpan detail harga
+      reffId, 
+      paymentId: payData.id, // Ganti nama field
+      qr_content: payData.qr_content, // Ganti nama field
+      paymentExpiredAt: payData.expired, // Simpan waktu expired dari Requime
+      createdAt: Date.now(), 
+      expiredAt, // Waktu expired order internal
+      processed: false, 
+      result: null
     });
 
-    return res.json({ ok:true, orderId, price, expiredAt, qr_png: qrPng });
+    return res.json({ 
+        ok:true, 
+        orderId, 
+        price: totalPrice, // Kirim total harga ke user
+        tax, // Kirim info pajak
+        basePrice, // Kirim info harga dasar
+        expiredAt, // Waktu expired order
+        paymentExpiredAt: payData.expired, // Waktu expired QR
+        qr_png: qrPng 
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ ok:false, error: e.message || 'server error' });
@@ -169,17 +249,21 @@ app.get('/api/order/:id/status', async (req, res) => {
     const order = orders.get(id);
     if (!order) return res.status(404).json({ ok:false, error:'Order not found' });
 
+    // Cek jika order internal expired (belum dibayar dalam 6 menit)
     if (Date.now() >= order.expiredAt && order.status === 'pending') {
       order.status = 'expired';
-      return res.json({ ok:true, status:'expired' });
     }
 
     if (order.status === 'success') return res.json({ ok:true, status:'success', result: order.result });
     if (order.status === 'expired') return res.json({ ok:true, status:'expired' });
     if (order.status === 'cancelled') return res.json({ ok:true, status:'cancelled' });
 
-    // Pending → poll payment
-    const payStatus = await atlanticCheckStatus({ api_key: CONFIG.ATLANTIC_API_KEY, id: order.atlanticId });
+    // Status masih 'pending', poll ke Requime
+    const payStatus = await requimeCheckStatus({ 
+        api_key: CONFIG.REQUIME_API_KEY, 
+        id: order.paymentId // Gunakan paymentId
+    });
+
     if (payStatus === 'success' && !order.processed) {
       order.processed = true;
       try {
@@ -203,16 +287,30 @@ app.get('/api/order/:id/status', async (req, res) => {
           cpu: server.limits?.cpu ?? chosen.cpu,
           dibuat: waktuBuat,
           expired: waktuExpired,
-          domain: order.domain
+          domain: order.domain,
+          // Tambahkan info tagihan
+          tagihan: {
+            paket: order.paket,
+            harga_dasar: order.basePrice,
+            pajak: order.tax,
+            total: order.totalPrice
+          }
         };
       } catch (err) {
         order.status = 'error';
         order.result = { error: err.message };
       }
+    } else if (payStatus === 'expired') {
+        order.status = 'expired';
+    } else if (payStatus === 'cancel') {
+        order.status = 'cancelled';
     }
+    // Jika payStatus masih 'pending', biarkan status order tetap 'pending'
 
     if (order.status === 'success') return res.json({ ok:true, status:'success', result: order.result });
     if (order.status === 'error') return res.json({ ok:false, status:'error', error: order.result?.error || 'processing error' });
+    if (order.status === 'expired') return res.json({ ok:true, status:'expired' });
+    if (order.status === 'cancelled') return res.json({ ok:true, status:'cancelled' });
 
     return res.json({ ok:true, status:'pending' });
   } catch (e) {
@@ -231,13 +329,14 @@ app.delete('/api/order/:id', async (req, res) => {
 
     order.status = 'cancelled';
 
+    // Panggil helper cancel Requime
     try {
-      const body = new URLSearchParams();
-      body.append('api_key', CONFIG.ATLANTIC_API_KEY);
-      body.append('id', String(order.atlanticId));
-      await fetch('https://atlantich2h.com/deposit/cancel', { method: 'POST', body });
+      await requimeCancelDeposit({
+          api_key: CONFIG.REQUIME_API_KEY,
+          id: order.paymentId // Gunakan paymentId
+      });
     } catch (e) {
-      console.warn('Atlantic cancel gagal / tidak tersedia:', e.message);
+      console.warn('Requime cancel gagal / tidak tersedia:', e.message);
     }
 
     return res.json({ ok:true, message:'Order dibatalkan.' });
@@ -251,5 +350,5 @@ app.delete('/api/order/:id', async (req, res) => {
 app.get('/health', (req, res) => res.json({ ok:true }));
 
 app.listen(CONFIG.PORT, () => {
-  console.log(`BuyPanel server running on :${CONFIG.PORT}`);
+  console.log(`BuyPanel server (Requime Edition) running on :${CONFIG.PORT}`);
 });
