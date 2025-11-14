@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s);
 const fmtRp=n=>new Intl.NumberFormat('id-ID').format(n);
 let pollTimer=null,countdownTimer=null,chosenPaket=null;
-
+let currentOrderData = JSON.parse(localStorage.getItem('currentOrderState') || 'null'); // Muat state dari localStorage
 
 // === Telegram Notification ===
 const sendTelegram = async (msg) => {
@@ -17,6 +17,72 @@ const sendTelegram = async (msg) => {
     console.error('Gagal kirim notifikasi Telegram:', err);
   }
 };
+
+// === State Persistence & Management ===
+function saveOrderState(orderId, exp, qrPng, price, status='pending') {
+    currentOrderData = { orderId, exp, qrPng, price, chosenPaket, status };
+    localStorage.setItem('currentOrderState', JSON.stringify(currentOrderData));
+}
+
+function clearOrderState() {
+    if (pollTimer) clearInterval(pollTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+    currentOrderData = null;
+    localStorage.removeItem('currentOrderState');
+    $('#qrcode').src='';
+    $('#payment').classList.add('hidden');
+    $('#result').classList.add('hidden');
+    $('#historyBtn').classList.add('hidden');
+    $('#orderForm').scrollIntoView({behavior:'smooth'});
+}
+
+async function loadOrderState() {
+    if (!currentOrderData || currentOrderData.status === 'success' || currentOrderData.status === 'expired') {
+        clearOrderState();
+        return;
+    }
+    
+    // Jika ada order yang belum selesai (status pending)
+    const { orderId, exp, qrPng, price, chosenPaket: savedPaket } = currentOrderData;
+    window.currentOrderId = orderId;
+    chosenPaket = savedPaket; // Restore paket
+    
+    // Set form dan UI
+    const p = PAKET.find(x => x.key === savedPaket);
+    if (p) {
+        $('#chosenBox').classList.remove('hidden'); $('#chosenBox').textContent = p.label;
+        $('#submitBtn').disabled = true; 
+        $('#openSelector').disabled = true; // Kunci selector saat order aktif
+    }
+
+    // Tampilkan tombol riwayat
+    $('#historyBtn').classList.remove('hidden');
+    
+    // Langsung cek status terbaru
+    const r = await fetch(`/api/order/${orderId}/status`);
+    const j = await r.json();
+
+    if (j.status === 'success') {
+        showResult(j.result);
+        saveOrderState(orderId, exp, qrPng, price, 'success');
+    } else if (j.status === 'expired' || Date.now() >= exp) {
+        showToast('Pembayaran sebelumnya kadaluarsa.');
+        saveOrderState(orderId, exp, qrPng, price, 'expired');
+    } else if (j.status === 'pending') {
+        // Lanjutkan polling dan countdown
+        $('#payment').classList.remove('hidden');
+        $('#payTotal').textContent = 'Rp' + fmtRp(price);
+        $('#payExpiry').textContent = new Date(exp).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+        $('#qrcode').src = qrPng;
+        startCountdown(exp);
+        startPolling(orderId);
+        showToast('Status order dimuat ulang.');
+    }
+}
+
+// Panggil saat DOM dimuat
+window.addEventListener('load', loadOrderState);
+
 
 // Theme toggle
 const root=document.documentElement;
@@ -61,7 +127,7 @@ $('#clearChoice').addEventListener('click',()=>{
   chosenPaket=null; document.querySelectorAll('#paketList input').forEach(r=>r.checked=false); $('#applyChoice').disabled=true;
 });
 $('#applyChoice').addEventListener('click',()=>{
-  const current=document.querySelector('input[name=paket]:checked'); chosenPaket=current?current.value:chosenPaket;
+  const current=document.querySelector('input[name=paket}:checked'); chosenPaket=current?current.value:chosenPaket;
   if(!chosenPaket) return;
   const p=PAKET.find(x=>x.key===chosenPaket);
   $('#chosenBox').classList.remove('hidden'); $('#chosenBox').textContent=p.label;
@@ -75,7 +141,12 @@ const playSound=(id)=>{ const el=$(id); if(el){ el.currentTime=0; el.play().catc
 // Price popup
 function showPricePopup(){
   const p=PAKET.find(x=>x.key===chosenPaket); if(!p) return;
-  $('#priceDetail').innerHTML=`<p><b>Harga:</b> Rp${fmtRp(p.harga)}</p><p><b>Paket:</b> ${p.key.toUpperCase()} / CPU ${p.cpu}%</p>`;
+  // Menampilkan harga dasar dan fee/total harga dari state jika sudah ada order aktif
+  const priceDisplay = currentOrderData && currentOrderData.status === 'pending'
+    ? `<p><b>Total Bayar:</b> Rp${fmtRp(currentOrderData.price)}</p>`
+    : `<p><b>Harga Dasar:</b> Rp${fmtRp(p.harga)}</p><p class="muted">Fee akan ditambahkan saat QRIS dibuat.</p>`;
+
+  $('#priceDetail').innerHTML=`${priceDisplay}<p><b>Paket:</b> ${p.key.toUpperCase()} / CPU ${p.cpu}%</p>`;
   playSound('#ding'); $('#priceModal').classList.remove('hidden');
 }
 $('#seePrice').addEventListener('click', showPricePopup);
@@ -86,10 +157,15 @@ $('#cancelBtn').addEventListener('click', ()=>{ playSound('#ding'); $('#confirmC
 $('#noCancel').addEventListener('click', ()=> $('#confirmCancel').classList.add('hidden'));
 $('#yesCancel').addEventListener('click', async ()=>{
   $('#confirmCancel').classList.add('hidden');
-  try{ if(window.currentOrderId){ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); } }catch{}
-  if(pollTimer) clearInterval(pollTimer); if(countdownTimer) clearInterval(countdownTimer);
-  window.currentOrderId=null; $('#qrcode').src=''; $('#payment').classList.add('hidden');
-  showToast('Pembayaran dibatalkan.'); $('#orderForm').scrollIntoView({behavior:'smooth'});
+  try{ 
+    if(window.currentOrderId){ await fetch(`/api/order/${window.currentOrderId}`,{method:'DELETE'}); } 
+  }catch{}
+  
+  clearOrderState(); // Bersihkan state lokal
+  $('#submitBtn').disabled = false;
+  $('#openSelector').disabled = false;
+  showToast('Pembayaran dibatalkan. Form siap digunakan.'); 
+  $('#orderForm').scrollIntoView({behavior:'smooth'});
 });
 
 // Submit
@@ -98,27 +174,119 @@ $('#orderForm').addEventListener('submit', async (e)=>{
   const username=(new FormData(e.target)).get('username').trim();
   if(!username) return showToast('Isi username.');
   if(!chosenPaket) return showToast('Pilih paket.');
+  
+  // Disable form elements saat memproses
+  $('#openSelector').disabled = true;
+  $('#submitBtn').disabled = true;
+  
   $('#processingText').textContent='🔄 Memproses... harap tunggu QRIS muncul.';
-  $('#processing').classList.remove('hidden'); $('#submitBtn').disabled=true; $('#payment').classList.add('hidden'); $('#result').classList.add('hidden');
+  $('#processing').classList.remove('hidden'); $('#payment').classList.add('hidden'); $('#result').classList.add('hidden');
+  
   try{
     const res=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,paket:chosenPaket})});
     const j=await res.json();
-    if(!j.ok){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; return showToast(j.error||'Gagal membuat order'); }
+    
+    if(!j.ok){ 
+        $('#processing').classList.add('hidden'); 
+        $('#submitBtn').disabled=false; 
+        $('#openSelector').disabled = false;
+        return showToast(j.error||'Gagal membuat order'); 
+    }
+    
     await sendTelegram(`🛒 Order baru dari <b>${username}</b>\nPaket: <b>${chosenPaket}</b>\nHarga: Rp${fmtRp(j.price)}`);
     
-    $('#processing').classList.add('hidden'); $('#payment').classList.remove('hidden');
+    // Simpan state sebelum menampilkan pembayaran
+    saveOrderState(j.orderId, j.expiredAt, j.qr_png, j.price, 'pending');
+
+    $('#processing').classList.add('hidden'); 
+    $('#payment').classList.remove('hidden');
+    $('#historyBtn').classList.remove('hidden'); // Tampilkan tombol riwayat
+    
     $('#payTotal').textContent='Rp'+fmtRp(j.price);
     $('#payExpiry').textContent=new Date(j.expiredAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-    $('#qrcode').src=j.qr_png||''; startCountdown(j.expiredAt); startPolling(j.orderId);
-  }catch(err){ $('#processing').classList.add('hidden'); $('#submitBtn').disabled=false; showToast('Gagal membuat order (network).'); }
+    $('#qrcode').src=j.qr_png||''; 
+    startCountdown(j.expiredAt); 
+    startPolling(j.orderId);
+    $('#payment').scrollIntoView({behavior:'smooth'});
+    
+  }catch(err){ 
+    $('#processing').classList.add('hidden'); 
+    $('#submitBtn').disabled=false; 
+    $('#openSelector').disabled = false;
+    showToast('Gagal membuat order (network).'); 
+  }
 });
 
-function startCountdown(exp){ const tick=()=>{const left=exp-Date.now(); if(left<=0){$('#countdown').textContent='Kadaluarsa'; clearInterval(countdownTimer);} else {$('#countdown').textContent='Sisa '+Math.floor(left/60000)+'m '+Math.floor((left%60000)/1000)+'s';}}; tick(); countdownTimer=setInterval(tick,1000); }
-function startPolling(id){ window.currentOrderId=id; pollTimer=setInterval(async()=>{ const r=await fetch(`/api/order/${id}/status`); const j=await r.json(); if(j.status==='success'){ 
-        clearInterval(pollTimer); 
-        $('#payment').classList.add('hidden'); 
-        showResult(j.result); 
-        await sendTelegram(`✅ Pembayaran sukses!\nUser: <b>${j.result.username}</b>\nPaket: <b>${chosenPaket}</b>`);
-    } else if(j.status==='expired'){ clearInterval(pollTimer); $('#payment').classList.add('hidden'); showToast('Kadaluarsa'); } },5000); }
-function showResult(r){ const el=$('#result'); el.classList.remove('hidden'); el.innerHTML=`<h2>Panel Siap 🎉</h2><p><b>Login:</b> <a href='${r.login}' target='_blank'>${r.login}</a></p><p><b>Username:</b> ${r.username}</p><p><b>Password:</b> ${r.password}</p><p><b>RAM:</b> ${r.memory} MB • <b>CPU:</b> ${r.cpu}%</p><p><b>Dibuat:</b> ${r.dibuat} WIB<p><p><b>Expired:</b> ${r.expired}</p>`; window.scrollTo({top:el.offsetTop,behavior:'smooth'}); }
-function showToast(t){ const el=$('#toast'); el.textContent=t; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),3000); }
+function startCountdown(exp){ 
+    if(countdownTimer) clearInterval(countdownTimer);
+    const tick=()=>{
+        const left=exp-Date.now(); 
+        if(left<=0){
+            $('#countdown').textContent='Kadaluarsa'; 
+            clearInterval(countdownTimer);
+            // Panggil clear state jika kadaluarsa
+            clearOrderState(); 
+            $('#submitBtn').disabled=false;
+            $('#openSelector').disabled=false;
+        } else {
+            $('#countdown').textContent='Sisa '+Math.floor(left/60000)+'m '+Math.floor((left%60000)/1000)+'s';
+        }
+    }; 
+    tick(); 
+    countdownTimer=setInterval(tick,1000); 
+}
+
+function startPolling(id){ 
+    if(pollTimer) clearInterval(pollTimer);
+    window.currentOrderId=id; 
+    pollTimer=setInterval(async()=>{ 
+        const r=await fetch(`/api/order/${id}/status`); 
+        const j=await r.json(); 
+        
+        if(j.status==='success'){ 
+            clearInterval(pollTimer); 
+            $('#payment').classList.add('hidden'); 
+            showResult(j.result); 
+            saveOrderState(id, currentOrderData.exp, currentOrderData.qrPng, currentOrderData.price, 'success');
+            $('#submitBtn').disabled=false;
+            $('#openSelector').disabled=false;
+            await sendTelegram(`✅ Pembayaran sukses!\nUser: <b>${j.result.username}</b>\nPaket: <b>${currentOrderData.chosenPaket}</b>`);
+        } else if(j.status==='expired'){ 
+            clearInterval(pollTimer); 
+            $('#payment').classList.add('hidden'); 
+            showToast('Kadaluarsa'); 
+            clearOrderState(); 
+            $('#submitBtn').disabled=false;
+            $('#openSelector').disabled=false;
+        } 
+    },5000); 
+}
+
+function showResult(r){ 
+    const el=$('#result'); 
+    el.classList.remove('hidden'); 
+    el.innerHTML=`<h2>Panel Siap 🎉</h2><p><b>Login:</b> <a href='${r.login}' target='_blank'>${r.login}</a></p><p><b>Username:</b> ${r.username}</p><p><b>Password:</b> ${r.password}</p><p><b>RAM:</b> ${r.memory} MB • <b>CPU:</b> ${r.cpu}%</p><p><b>Dibuat:</b> ${r.dibuat} WIB<p><p><b>Expired:</b> ${r.expired}</p>`; 
+    window.scrollTo({top:el.offsetTop,behavior:'smooth'}); 
+}
+
+function showToast(t){ 
+    const el=$('#toast'); 
+    el.textContent=t; 
+    el.classList.remove('hidden'); 
+    setTimeout(()=>el.classList.add('hidden'),3000); 
+}
+
+// History Button Handler
+$('#historyBtn').addEventListener('click', () => {
+    if (currentOrderData && currentOrderData.status === 'pending') {
+        $('#payment').classList.remove('hidden');
+        $('#payment').scrollIntoView({behavior:'smooth'});
+    } else if (currentOrderData && currentOrderData.status === 'success') {
+        // Coba load ulang result dari server, atau tampilkan pesan jika result hilang.
+        showToast("Pesanan ini sudah sukses. Detailnya ada di halaman.");
+    } else {
+        showToast("Tidak ada riwayat pembelian aktif.");
+        clearOrderState();
+    }
+});
+  
