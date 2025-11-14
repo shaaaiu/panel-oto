@@ -7,52 +7,21 @@
   <link rel="stylesheet" href="/styles.css">
 
   <style>
-    /* ===== BACKGROUND ANGKASA BERGERAK ===== */
-    body {
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    .space-bg {
+    /* ===== BACKGROUND VIDEO ===== */
+    .video-bg {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      object-fit: cover;
       z-index: -10;
-      overflow: hidden;
+      filter: brightness(0.55); /* biar konten tetap jelas */
     }
 
-    /* Layer bintang */
-    .stars1, .stars2, .stars3 {
-      position: absolute;
-      width: 200%;
-      height: 200%;
-      background-repeat: repeat;
-      animation: spaceMove linear infinite;
-    }
-
-    .stars1 {
-      background-image: url('https://files.catbox.moe/ji1gpe.mp4'); /* bintang halus */
-      opacity: 0.6;
-      animation-duration: 180s;
-    }
-
-    .stars2 {
-      background-image: url('https://files.catbox.moe/ji1gpe.mp4'); /* bintang sedang */
-      opacity: 0.8;
-      animation-duration: 120s;
-    }
-
-    .stars3 {
-      background-image: url('https://files.catbox.moe/ji1gpe.mp4'); /* bintang besar */
-      opacity: 1;
-      animation-duration: 70s;
-    }
-
-    @keyframes spaceMove {
-      from { transform: translate3d(0,0,0); }
-      to   { transform: translate3d(-500px, -500px, 0); }
+    body {
+      position: relative;
+      overflow-x: hidden;
     }
 
     /* ===== HEADER ===== */
@@ -64,7 +33,6 @@
       padding: 10px 8px;
     }
 
-    /* LOGO KECIL & BULAT */
     .store-logo {
       width: 42px;
       height: 42px;
@@ -74,9 +42,7 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.25);
     }
 
-    .header-text {
-      flex: 1;
-    }
+    .header-text { flex: 1; }
 
     .header-text h1 {
       margin: 0;
@@ -94,14 +60,12 @@
 </head>
 <body>
 
-  <!-- BACKGROUND ANGKASA -->
-  <div class="space-bg">
-    <div class="stars1"></div>
-    <div class="stars2"></div>
-    <div class="stars3"></div>
-  </div>
+  <!-- ===== VIDEO BACKGROUND ===== -->
+  <video autoplay muted loop playsinline class="video-bg">
+    <source src="https://files.catbox.moe/ji1gpe.mp4" type="video/mp4">
+  </video>
 
-  <!-- HEADER BARU -->
+  <!-- HEADER -->
   <header class="hero">
     <div class="hero-content new-header">
 
@@ -112,7 +76,7 @@
         <p>Pilih paket, bayar via QRIS, panel langsung dibuat otomatis ⚡</p>
       </div>
 
-      <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
+
     </div>
   </header>
 
@@ -135,16 +99,12 @@
 
       <div class="button-row" style="margin-top:16px;">
         <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
-
-        <button type="button" id="refreshFormBtn" class="secondary large">
-          Refresh Input
-        </button>
+        <button type="button" id="refreshFormBtn" class="secondary large">Refresh Input</button>
       </div>
 
       <button type="button" id="historyBtn" class="secondary large" style="margin-top:14px;width:100%;">
         Cek Riwayat Pembelian
       </button>
-
     </form>
 
     <div id="processing" class="card hidden">
