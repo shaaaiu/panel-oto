@@ -7,13 +7,21 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+
+  <!-- HEADER BARU -->
   <header class="hero">
-    <div class="hero-content">
-      <img src="https://cdn-icons-png.flaticon.com/512/1040/1040238.png" class="hero-icon" alt="logo">
-      <div>
+    <div class="hero-content new-header">
+      
+      <!-- LOGO TOKO -->
+      <img src="https://files.catbox.moe/ekzjc8.jpg" class="store-logo" alt="Logo Store">
+
+      <!-- TITLE + SUBTITLE -->
+      <div class="header-text">
         <h1>Buy Panel Otomatis</h1>
         <p>Pilih paket, bayar via QRIS, panel langsung dibuat otomatis ⚡</p>
       </div>
+
+      <!-- TOGGLE MODE -->
       <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙</button>
     </div>
   </header>
@@ -35,17 +43,17 @@
 
       <button type="button" class="ghost hidden" id="seePrice">Lihat Harga Paket</button>
 
-      <!-- tombol utama -->
+      <!-- Tombol utama -->
       <div class="button-row" style="margin-top:16px;">
         <button type="submit" class="primary" id="submitBtn" disabled>Buat QRIS & Order</button>
 
-        <!-- Refresh Input dibuat sama style nya -->
+        <!-- Refresh Input (style disamakan) -->
         <button type="button" id="refreshFormBtn" class="secondary large">
           Refresh Input
         </button>
       </div>
 
-      <!-- tombol cek riwayat di bawah -->
+      <!-- Tombol cek riwayat -->
       <button type="button" id="historyBtn" class="secondary large" style="margin-top:14px;width:100%;">
         Cek Riwayat Pembelian
       </button>
