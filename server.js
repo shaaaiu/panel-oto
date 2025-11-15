@@ -6,6 +6,7 @@ import moment from 'moment-timezone';
 import QRCode from 'qrcode';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -20,9 +21,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Config (from .env) ---
 const CONFIG = {
-  REQUIME_API_KEY: process.env.REQUIME_API_KEY,
-  // TAX_RATE tidak digunakan lagi, fee dihitung oleh Requime
-  
+  ORKUT_APIKEY: process.env.ORKUT_APIKEY,
+  ORKUT_USERNAME: process.env.ORKUT_USERNAME,
+  ORKUT_TOKEN: process.env.ORKUT_TOKEN,
+
   PTERO_DOMAIN: process.env.PTERO_DOMAIN,
   PTERO_APP_KEY: process.env.PTERO_APP_KEY,
   EGG_ID: parseInt(process.env.PTERO_EGG_ID || '15', 10),
@@ -50,104 +52,64 @@ const PAKET = {
   'unli': { harga: 15000, memo: 999999, cpu: 500 }
 };
 
-function isValidUsername(u) { return /^[a-zA-Z0-9]{3,15}$/.test(u); }
-function expiryTimestamp(minutes=6) { return Date.now() + minutes*60*1000; }
+function isValidUsername(u) { 
+  return /^[a-zA-Z0-9]{3,15}$/.test(u); 
+}
+function expiryTimestamp(minutes = 6) { 
+  return Date.now() + minutes * 60 * 1000; 
+}
 
-// --- Helper API RequimeBoost (Diperbarui) ---
+// --- Helper API ORKUT (pengganti Requime) ---
 
-/**
- * Membuat QRIS via RequimeBoost
- * Menggunakan format payload dan cek status yang sesuai dengan cURL/screenshot.
- */
-async function requimeCreateQRIS({ api_key, reff_id, basePrice }) {
-  const body = {
-    nominal: String(basePrice),             // Mengirim harga dasar
-    method: 'QRISFAST',                      // Sesuai contoh cURL
-    fee_by_customer: 'false',                // Sesuai contoh cURL
-    reff_id,
-    api_key,
-  };
-
-  console.log('[REQUIME CREATE REQUEST BODY]', body); 
-  
-  const res = await fetch('https://requimeboost.id/api/h2h/deposit/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  
-  const rawText = await res.text();
-  console.log('[REQUIME CREATE RAW RESPONSE]', rawText); 
-  
-  if (!res.ok) throw new Error(`Requime create error HTTP ${res.status}`);
-  
-  try {
-    const json = JSON.parse(rawText);
-    
-    // Cek 'status' === 'success' (berdasarkan screenshot)
-    if (json.status !== 'success' || !json.data) {
-      throw new Error(`Requime create error: ${json.message || 'unknown'}`);
-    }
-    
-    const data = json.data;
-    
-    return {
-        id: data.id, 
-        qr_content: data.qr_image_string, // Mengambil QR string dari qr_image_string
-        expired: data.expired_at,         // Mengambil expired dari expired_at
-        total_nominal: data.nominal + data.fee, // Nominal + Fee = Total Bayar
-        fee: data.fee
-    }; 
-  } catch (e) {
-    throw new Error(`Requime API response parsing failed: ${e.message}. Raw: ${rawText}`);
+// Create QRIS ke Orkut
+async function orkutCreateQRIS(amount) {
+  if (!CONFIG.ORKUT_APIKEY || !CONFIG.ORKUT_USERNAME || !CONFIG.ORKUT_TOKEN) {
+    throw new Error('Config ORKUT_APIKEY / ORKUT_USERNAME / ORKUT_TOKEN belum di-set di .env');
   }
-}
 
-/**
- * Cek Status Deposit RequimeBoost
- * Menggunakan format JSON
- */
-async function requimeCheckStatus({ api_key, id }) {
-  const body = {
-    api_key,
-    id: String(id)
+  const url = `https://apii.ryuuxiao.biz.id/orderkuota/createpayment` +
+              `?apikey=${CONFIG.ORKUT_APIKEY}` +
+              `&username=${CONFIG.ORKUT_USERNAME}` +
+              `&token=${CONFIG.ORKUT_TOKEN}` +
+              `&amount=${amount}`;
+
+  console.log('[ORKUT CREATE REQUEST URL]', url);
+  const res = await axios.get(url);
+  const data = res.data;
+
+  console.log('[ORKUT CREATE RAW RESPONSE]', data);
+
+  if (!data?.status) {
+    throw new Error(`Orkut create error: ${data?.message || 'unknown'}`);
+  }
+
+  return {
+    qr_link: data.result.imageqris.url
   };
-  const res = await fetch('https://requimeboost.id/api/h2h/deposit/status', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify(body)
+}
+
+// Cek mutasi Orkut
+async function orkutCheckMutasi(amount) {
+  const url = `https://apii.ryuuxiao.biz.id/orderkuota/mutasiqr` +
+              `?apikey=${CONFIG.ORKUT_APIKEY}` +
+              `&username=${CONFIG.ORKUT_USERNAME}` +
+              `&token=${CONFIG.ORKUT_TOKEN}`;
+
+  const res = await axios.get(url);
+  const json = res.data;
+  const list = json?.result || [];
+
+  console.log('[ORKUT MUTASI RAW]', JSON.stringify(json).slice(0, 500));
+
+  const found = list.find(i => {
+    const kredit = parseInt((i.kredit || '0').replace(/\./g, ''), 10);
+    return i.status === 'IN' && kredit === amount;
   });
-  if (!res.ok) throw new Error(`Requime status error HTTP ${res.status}`);
-  const json = await res.json();
-  // Status pembayaran ada di json.data.status (pending, success, expired, cancel)
-  return json?.data?.status || 'pending';
+
+  return !!found; // true = sudah bayar, false = belum
 }
 
-/**
- * Batalkan Deposit RequimeBoost
- * Menggunakan format JSON
- */
-async function requimeCancelDeposit({ api_key, id }) {
-    const body = {
-      api_key,
-      id: String(id)
-    };
-    const res = await fetch('https://requimeboost.id/api/h2h/deposit/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-        console.warn(`Requime cancel warning: HTTP ${res.status}`);
-    }
-    const json = await res.json();
-    if (json.status !== 'success') {
-        console.warn(`Requime cancel warning: ${json.message || 'Failed to cancel'}`);
-    }
-    return json;
-}
-
-// --- Helper Pterodactyl (Tidak Berubah) ---
+// --- Helper Pterodactyl (Tidak Berubah kecuali syntax) ---
 
 async function pteroCreateOrGetUser({ email, username, password }) {
   const createRes = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/users`, {
@@ -157,13 +119,23 @@ async function pteroCreateOrGetUser({ email, username, password }) {
       'Content-Type':'application/json',
       'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}`
     },
-    body: JSON.stringify({ email, username, first_name: username, last_name: username, language: 'en', password })
+    body: JSON.stringify({ 
+      email, 
+      username, 
+      first_name: username, 
+      last_name: username, 
+      language: 'en', 
+      password 
+    })
   });
   const createJson = await createRes.json();
   if (createRes.ok && !createJson?.errors) return createJson.attributes;
 
   const listRes = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/users?filter[email]=${encodeURIComponent(email)}`, {
-    headers: { 'Accept':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` }
+    headers: { 
+      'Accept':'application/json',
+      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` 
+    }
   });
   const listJson = await listRes.json();
   const user = listJson?.data?.[0]?.attributes;
@@ -176,7 +148,10 @@ async function pteroCreateOrGetUser({ email, username, password }) {
 
 async function pteroGetEggStartup({ nestId, eggId }) {
   const res = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/nests/${nestId}/eggs/${eggId}`, {
-    headers: { 'Accept':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` }
+    headers: { 
+      'Accept':'application/json',
+      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` 
+    }
   });
   if (!res.ok) throw new Error(`Pterodactyl egg error HTTP ${res.status}`);
   const json = await res.json();
@@ -186,7 +161,11 @@ async function pteroGetEggStartup({ nestId, eggId }) {
 async function pteroCreateServer({ userId, name, memo, cpu, eggId, startup, locId }) {
   const res = await fetch(`${CONFIG.PTERO_DOMAIN}/api/application/servers`, {
     method: 'POST',
-    headers: { 'Accept':'application/json','Content-Type':'application/json','Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` },
+    headers: { 
+      'Accept':'application/json',
+      'Content-Type':'application/json',
+      'Authorization': `Bearer ${CONFIG.PTERO_APP_KEY}` 
+    },
     body: JSON.stringify({
       name, description:' ', user:userId, egg:eggId, docker_image:'ghcr.io/parkervcp/yolks:nodejs_18',
       startup,
@@ -207,8 +186,8 @@ async function pteroCreateServer({ userId, name, memo, cpu, eggId, startup, locI
 // --- API: Create order (username + paket + domain) ---
 app.post('/api/order', async (req, res) => {
   try {
-    if (!CONFIG.REQUIME_API_KEY) {
-         return res.status(500).json({ ok: false, error: 'REQUIME_API_KEY tidak dikonfigurasi di .env' });
+    if (!CONFIG.ORKUT_APIKEY) {
+      return res.status(500).json({ ok: false, error: 'ORKUT_APIKEY tidak dikonfigurasi di .env' });
     }
     
     const { username, paket, domain } = req.body || {};
@@ -218,41 +197,32 @@ app.post('/api/order', async (req, res) => {
     if (!chosen) return res.status(400).json({ ok:false, error:'Paket tidak dikenal' });
 
     const orderId = crypto.randomBytes(6).toString('hex').toUpperCase();
-    const reffId = crypto.randomBytes(5).toString('hex').toUpperCase();
     
     // Gunakan harga paket sebagai harga dasar
     const basePrice = chosen.harga; 
     
-    // Minimal nominal deposit (sesuaikan jika berbeda)
     if (basePrice < 500) { 
-        return res.status(400).json({ ok: false, error: 'Harga dasar paket minimal Rp500 (sesuai standar API)' });
+      return res.status(400).json({ ok: false, error: 'Harga dasar paket minimal Rp500' });
     }
     
     const expiredAt = expiryTimestamp(6); 
 
-    // Panggil helper Requime: kirim basePrice sebagai nominal
-    const payData = await requimeCreateQRIS({ 
-        api_key: CONFIG.REQUIME_API_KEY, 
-        reff_id: reffId, 
-        basePrice // Kirim basePrice ke helper
-    });
-    
-    // Gunakan total nominal dan fee yang dikembalikan dari API
-    const totalPrice = payData.total_nominal; 
-    const tax = payData.fee;
+    // Orkut: buat QRIS
+    const payData = await orkutCreateQRIS(basePrice);
+    const totalPrice = basePrice; // Orkut fee sudah ditangani di sana (kalau ada)
 
-    const qrPng = await QRCode.toDataURL(payData.qr_content, { margin: 2, scale: 8 });
+    const qrPng = await QRCode.toDataURL(payData.qr_link, { margin: 2, scale: 8 });
 
     orders.set(orderId, {
       status: 'pending',
       username, paket: String(paket).toLowerCase(), domain: domain || null,
       basePrice, 
-      tax, 
+      tax: 0, 
       totalPrice, 
-      reffId, 
-      paymentId: payData.id, 
-      qr_content: payData.qr_content, 
-      paymentExpiredAt: payData.expired, 
+      reffId: null, 
+      paymentId: null, 
+      qr_content: payData.qr_link, 
+      paymentExpiredAt: null, 
       createdAt: Date.now(), 
       expiredAt, 
       processed: false, 
@@ -260,22 +230,18 @@ app.post('/api/order', async (req, res) => {
     });
 
     return res.json({ 
-        ok:true, 
-        orderId, 
-        price: totalPrice, // Total harga yang harus dibayar user
-        tax, 
-        basePrice, 
-        expiredAt, 
-        paymentExpiredAt: payData.expired, 
-        qr_png: qrPng 
+      ok:true, 
+      orderId, 
+      price: totalPrice,
+      tax: 0,
+      basePrice, 
+      expiredAt, 
+      paymentExpiredAt: null, 
+      qr_png: qrPng 
     });
   } catch (e) {
     console.error(e);
     let errorMessage = e.message || 'server error';
-    if (errorMessage.includes('Requime create error')) {
-      errorMessage = `Gagal membuat QRIS. Cek log server untuk detail Requime Response. (${errorMessage})`;
-    }
-
     return res.status(500).json({ ok:false, error: errorMessage });
   }
 });
@@ -295,12 +261,10 @@ app.get('/api/order/:id/status', async (req, res) => {
     if (order.status === 'expired') return res.json({ ok:true, status:'expired' });
     if (order.status === 'cancelled') return res.json({ ok:true, status:'cancelled' });
 
-    const payStatus = await requimeCheckStatus({ 
-        api_key: CONFIG.REQUIME_API_KEY, 
-        id: order.paymentId 
-    });
+    // Check mutasi Orkut berdasarkan totalPrice
+    const paid = await orkutCheckMutasi(order.totalPrice);
 
-    if (payStatus === 'success' && !order.processed) {
+    if (paid && !order.processed) {
       order.processed = true;
       try {
         const email = `${order.username}@panel.com`;
@@ -332,13 +296,10 @@ app.get('/api/order/:id/status', async (req, res) => {
           }
         };
       } catch (err) {
+        console.error('Ptero process error:', err);
         order.status = 'error';
         order.result = { error: err.message };
       }
-    } else if (payStatus === 'expired') {
-        order.status = 'expired';
-    } else if (payStatus === 'cancel') {
-        order.status = 'cancelled';
     }
 
     if (order.status === 'success') return res.json({ ok:true, status:'success', result: order.result });
@@ -363,15 +324,7 @@ app.delete('/api/order/:id', async (req, res) => {
 
     order.status = 'cancelled';
 
-    try {
-      await requimeCancelDeposit({
-          api_key: CONFIG.REQUIME_API_KEY,
-          id: order.paymentId 
-      });
-    } catch (e) {
-      console.warn('Requime cancel gagal / tidak tersedia:', e.message);
-    }
-
+    // Orkut tidak punya endpoint cancel khusus, jadi hanya local
     return res.json({ ok:true, message:'Order dibatalkan.' });
   } catch (e) {
     console.error(e);
@@ -383,7 +336,5 @@ app.delete('/api/order/:id', async (req, res) => {
 app.get('/health', (req, res) => res.json({ ok:true }));
 
 app.listen(CONFIG.PORT, () => {
-  console.log(`BuyPanel server (Requime Edition) running on :${CONFIG.PORT}`);
+  console.log(`BuyPanel server (ORKUT Edition) running on :${CONFIG.PORT}`);
 });
-
-            
