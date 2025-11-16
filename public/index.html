@@ -57,9 +57,8 @@
       font-size: .95rem;    
     }
 
-
     /* ===========================
-       NEON INPUT STYLE
+       NEON INPUT UNIVERSAL
     ============================ */
     .input-neon {
       width: 100%;
@@ -75,8 +74,8 @@
     }
 
     .input-neon::placeholder {
-      color: #bcd;
-      opacity: .7;
+      color: #cfe;
+      opacity: .75;
     }
 
     .input-neon:focus {
@@ -184,16 +183,24 @@
       <h2>Form Pemesanan</h2>    
       <p class="muted">Masukkan username, nomor telepon dan pilih paket. Setelah pembayaran sukses, panel otomatis dibuat.</p>  
 
-      <!-- Username -->
+      <!-- USERNAME -->
       <div class="field">    
         <label>Username</label>    
-        <input required name="username" id="usernameInput" maxlength="15" pattern="[a-zA-Z0-9]{3,15}" placeholder="Masukan Username (3–15 huruf/angka)" class="input-neon">    
+        <input required name="username" id="usernameInput"
+               maxlength="15"
+               pattern="[a-zA-Z0-9]{3,15}"
+               placeholder="Masukan Username (3–15 huruf/angka)"
+               class="input-neon">    
       </div>      
 
-      <!-- Nomor Telepon (NEW) -->
+      <!-- PHONE -->
       <div class="field">    
         <label>Nomor Telepon</label>    
-        <input required name="phone" id="phoneInput" maxlength="15" pattern="[0-9]{8,15}" placeholder="Masukan Nomor Telepon (WA)" class="input-neon">    
+        <input required name="phone" id="phoneInput"
+               maxlength="15"
+               pattern="[0-9]{8,15}"
+               placeholder="Masukan Nomor Telepon (WA)"
+               class="input-neon">    
       </div>
 
       <div class="field">    
@@ -231,17 +238,20 @@
     <div id="toast" class="toast hidden"></div>    
   </div>    
 
-  <!-- Modal dst… (tidak diubah apa pun, sama seperti versi asli) -->
+  <!-- ALL MODALS TETAP SAMA — TIDAK DIUBAH -->
+  <!-- (Pilih Paket, Harga, Batal, Riwayat) -->
 
   <audio id="ding" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_5b3b7c9b6d.mp3?filename=ding.mp3"></audio>    
   <script src="/app.js"></script>  
 
-  <!-- CONTACT BUTTON FLOAT -->
+  <!-- CONTACT FLOAT BUTTON -->
   <div class="floating-wrapper">
+
     <div class="floating-options" id="contactOptions">
       <a href="https://wa.me/6285143569870" class="contact-btn">
         <img src="https://files.catbox.moe/87radf.png" alt="WA">
       </a>
+
       <a href="https://t.me/Ryuuen3" class="contact-btn">
         <img src="https://files.catbox.moe/uq8td0.png" alt="Telegram">
       </a>
@@ -259,4 +269,4 @@
   </script>
 
 </body>    
-      </html>
+                                                                                                                            </html>
