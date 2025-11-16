@@ -1,325 +1,393 @@
-/*  CHECK PAYMENT STATUS  */
-/* —/* app.js - versi terbaru
-   Fitur tambahan:
-   - Nomor telepon pembeli
-   - Phone terkirim ke server + tampil di result + masuk history
-   - Validasi phone
-   - Telegram notif ikut kirim nomor
-*/
+// app.js - versi simpel tapi lengkap
+// Flow: isi username + phone -> pilih paket -> buat QRIS -> cek status
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
-const fmtRp = (n) => new Intl.NumberFormat('id-ID').format(n);
 
-// --- CONFIG (ubah kalau perlu) ---
-const HISTORY_KEY = 'orderHistory_v1';
-const CHOSEN_KEY = 'chosenPaket_v1';
-const FORM_USER_KEY = 'form_username_v1';
-const FORM_PHONE_KEY = 'form_phone_v1';   // === PHONE UPDATE ===
-const CURRENT_ORDER_KEY = 'currentOrder';
+const fmtRp = (n) => new Intl.NumberFormat("id-ID").format(n);
 
-const adminPercent = 0.12;
-const adminFixed = 8;
+// ELEMENT DOM
+const usernameInput = $("#usernameInput");
+const phoneInput = $("#phoneInput");
+const openSelectorBtn = $("#openSelector");
+const chosenBox = $("#chosenBox");
+const seePriceBtn = $("#seePrice");
+const submitBtn = $("#submitBtn");
+const refreshFormBtn = $("#refreshFormBtn");
 
-// telegram notif
-const TELEGRAM_BOT = '8105677831:AAFRyE6rRbIi3E9riMBIkaSA0Ya_lfT9tWg';
-const TELEGRAM_CHAT = '5254873680';
+const processingCard = $("#processing");
+const paymentCard = $("#payment");
+const payTotalEl = $("#payTotal");
+const payExpiryEl = $("#payExpiry");
+const qrcodeImg = $("#qrcode");
+const countdownEl = $("#countdown");
+const cancelBtn = $("#cancelBtn");
+const resultCard = $("#result");
+const toastEl = $("#toast");
 
-/* ----------------- UI ELEMENTS ----------------- */
-const usernameInput = $('#usernameInput');
-const phoneInput = $('#phoneInput');   // === PHONE UPDATE ===
-const openSelectorBtn = $('#openSelector');
-const chosenBox = $('#chosenBox');
-const submitBtn = $('#submitBtn');
-const seePriceBtn = $('#seePrice');
-const processingCard = $('#processing');
-const paymentCard = $('#payment');
-const payTotalEl = $('#payTotal');
-const payExpiryEl = $('#payExpiry');
-const qrcodeImg = $('#qrcode');
-const countdownEl = $('#countdown');
-const cancelBtn = $('#cancelBtn');
-const resultCard = $('#result');
-const toastEl = $('#toast');
+// modal2
+const selectorModal = $("#selectorModal");
+const priceModal = $("#priceModal");
+const confirmCancelModal = $("#confirmCancel");
+const historyModal = $("#historyModal"); // masih dipakai id-nya supaya nggak error
 
-const selectorModal = $('#selectorModal');
-const priceModal = $('#priceModal');
-const confirmCancelModal = $('#confirmCancel');
-const historyModal = $('#historyModal');
+const paketListEl = $("#paketList");
+const applyChoiceBtn = $("#applyChoice");
+const clearChoiceBtn = $("#clearChoice");
 
-const paketListEl = $('#paketList');
-const applyChoiceBtn = $('#applyChoice');
-const clearChoiceBtn = $('#clearChoice');
+const historyBtn = $("#historyBtn");
+const historyListEl = $("#historyList");
+const clearAllHistoryBtn = $("#clearAllHistory");
 
-const historyBtn = $('#historyBtn');
-const historyListEl = $('#historyList');
-const clearAllHistoryBtn = $('#clearAllHistory');
-const refreshFormBtn = $('#refreshFormBtn');
+// AUDIO
+const ding = $("#ding");
 
+// STATE
 let chosenPaket = null;
 let pollTimer = null;
 let countdownTimer = null;
 let currentOrderId = null;
 
-/* ----------------- UTILITIES ----------------- */
-function showToast(txt, ms = 2500) {
-  toastEl.textContent = txt;
-  toastEl.classList.remove('hidden');
-  setTimeout(() => toastEl.classList.add('hidden'), ms);
+// DATA PAKET (SAMAKAN DENGAN SERVER)
+const PAKET = [
+  { key: "1gb", label: "1GB (Rp2.000)", harga: 2000 },
+  { key: "2gb", label: "2GB (Rp3.000)", harga: 3000 },
+  { key: "3gb", label: "3GB (Rp4.000)", harga: 4000 },
+  { key: "4gb", label: "4GB (Rp5.000)", harga: 5000 },
+  { key: "5gb", label: "5GB (Rp6.000)", harga: 6000 },
+  { key: "6gb", label: "6GB (Rp7.000)", harga: 7000 },
+  { key: "7gb", label: "7GB (Rp8.000)", harga: 8000 },
+  { key: "8gb", label: "8GB (Rp9.000)", harga: 9000 },
+  { key: "9gb", label: "9GB (Rp10.000)", harga: 10000 },
+  { key: "10gb", label: "10GB (Rp12.000)", harga: 12000 },
+  { key: "unli", label: "UNLI (Rp15.000)", harga: 15000 },
+];
+
+// =============== UTIL ===============
+
+function showToast(msg, ms = 2500) {
+  if (!toastEl) return;
+  toastEl.textContent = msg;
+  toastEl.classList.remove("hidden");
+  setTimeout(() => toastEl.classList.add("hidden"), ms);
 }
+
 function playDing() {
-  const ding = document.getElementById('ding');
-  if (ding) ding.play().catch(() => {});
+  if (!ding) return;
+  ding.currentTime = 0;
+  ding.play().catch(() => {});
 }
 
 function openModalSmooth(id) {
   const el = document.getElementById(id);
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('show'), 10);
+  if (!el) return;
+  el.classList.remove("hidden");
+  setTimeout(() => el.classList.add("show"), 10);
 }
+
 function closeModalSmooth(id) {
   const el = document.getElementById(id);
-  el.classList.remove('show');
-  setTimeout(() => el.classList.add('hidden'), 170);
+  if (!el) return;
+  el.classList.remove("show");
+  setTimeout(() => el.classList.add("hidden"), 170);
 }
 
-/* ----------------- PAKET DATA ----------------- */
-const PAKET = [
-  { key: '1gb', label: '1GB (Rp2.000)', harga: 2000, cpu: 30 },
-  { key: '2gb', label: '2GB (Rp3.000)', harga: 3000, cpu: 50 },
-  { key: '3gb', label: '3GB (Rp4.000)', harga: 4000, cpu: 75 },
-  { key: '4gb', label: '4GB (Rp5.000)', harga: 5000, cpu: 100 },
-  { key: '5gb', label: '5GB (Rp6.000)', harga: 6000, cpu: 130 },
-  { key: '6gb', label: '6GB (Rp7.000)', harga: 7000, cpu: 150 },
-  { key: '7gb', label: '7GB (Rp8.000)', harga: 8000, cpu: 175 },
-  { key: '8gb', label: '8GB (Rp9.000)', harga: 9000, cpu: 200 },
-  { key: '9gb', label: '9GB (Rp10.000)', harga: 10000, cpu: 225 },
-  { key: '10gb', label: '10GB (Rp12.000)', harga: 12000, cpu: 250 },
-  { key: 'unli', label: 'UNLI (Rp15.000)', harga: 15000, cpu: 500 }
-];
-
-function renderPaketList() {
-  paketListEl.innerHTML = PAKET.map(p => {
-    return `<label style="display:block;padding:10px;border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px dashed var(--line);">
-      <input type="radio" name="paket" value="${p.key}" style="margin-right:8px"> ${p.label}
-    </label>`;
-  }).join('');
-}
-
-/* ----------------- HISTORY ----------------- */
-function getHistory() {
-  return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-}
-function saveHistoryItem(item) {
-  const arr = getHistory();
-  arr.unshift(item);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(0, 200)));
-}
-function renderHistoryList() {
-  const arr = getHistory();
-  if (!arr.length) {
-    historyListEl.innerHTML = `<p class="muted">Belum ada riwayat.</p>`;
-    return;
-  }
-  historyListEl.innerHTML = arr.map((it) => `
-    <div style="padding:10px;border-bottom:1px solid #333">
-      <b>${it.username}</b> • ${it.paket.toUpperCase()}
-      <div class="muted" style="font-size:12px">Nomor: ${it.phone || '-'}</div>
-      <div style="font-size:12px">Login: <a href="${it.login}" target="_blank">${it.login}</a></div>
-    </div>
-  `).join('');
-}
-
-/* ----------------- CALC ----------------- */
-function calcAdmin(price) {
-  return Math.round(price * adminPercent) + adminFixed;
-}
-function calcTotal(price) {
-  return price + calcAdmin(price);
-}
-
-/* ----------------- API ----------------- */
-async function createOrderOnServer(payload) {
-  const res = await fetch('/api/order', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  return res.json();
-}
-async function getOrderStatus(orderId) {
-  const res = await fetch(`/api/order/${orderId}/status`);
-  return res.json();
-}
-async function cancelOrderOnServer(id) {
-  return fetch(`/api/order/${id}`, { method: 'DELETE' });
-}
-
-/* ----------------- COUNTDOWN ----------------- */
+// countdown timer
 function startCountdown(expTs) {
-  clearInterval(countdownTimer);
-  countdownTimer = setInterval(() => {
-    const sisa = expTs - Date.now();
-    if (sisa <= 0) {
+  if (!countdownEl) return;
+  if (countdownTimer) clearInterval(countdownTimer);
+
+  function tick() {
+    const left = expTs - Date.now();
+    if (left <= 0) {
       countdownEl.textContent = "Kadaluarsa";
       clearInterval(countdownTimer);
       return;
     }
-    const mm = Math.floor(sisa / 60000);
-    const ss = Math.floor((sisa % 60000) / 1000);
+    const mm = Math.floor(left / 60000);
+    const ss = Math.floor((left % 60000) / 1000);
     countdownEl.textContent = `Sisa ${mm}m ${ss}s`;
-  }, 1000);
+  }
+
+  tick();
+  countdownTimer = setInterval(tick, 1000);
 }
 
-/* ----------------- RESULT ----------------- */
-function showResult(data) {
-  resultCard.classList.remove('hidden');
-  resultCard.innerHTML = `
-    <h2>Panel Siap 🎉</h2>
-    <p><b>Nomor:</b> ${data.phone || '-'}</p>
-    <p><b>Username:</b> ${data.username}</p>
-    <p><b>Password:</b> ${data.password}</p>
-    <p><b>Login:</b> <a href="${data.login}" target="_blank">${data.login}</a></p>
-    <p><b>RAM:</b> ${data.memory} MB</p>
-    <p><b>CPU:</b> ${data.cpu}%</p>
-    <p><b>Expired:</b> ${data.expired}</p>
-  `;
+// polling status
+async function getOrderStatus(id) {
+  const res = await fetch(`/api/order/${id}/status`);
+  return res.json();
 }
 
-/* ----------------- POLLING ----------------- */
 function startPolling(orderId) {
-  clearInterval(pollTimer);
+  if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
-    const st = await getOrderStatus(orderId);
-    if (st.status === 'success') {
-      clearInterval(pollTimer);
-      paymentCard.classList.add('hidden');
+    try {
+      const data = await getOrderStatus(orderId);
+      if (!data) return;
 
-      // === SAVE HISTORY ===
-      saveHistoryItem({
-        username: st.result.username,
-        phone: st.result.phone, // === PHONE UPDATE ===
-        paket: st.result.tagihan?.paket || '',
-        login: st.result.login,
-        expired: st.result.expired,
-        password: st.result.password
-      });
-
-      showResult(st.result);
-      localStorage.removeItem(CURRENT_ORDER_KEY);
-      playDing();
-      showToast('Pembayaran sukses!');
+      if (data.status === "success") {
+        clearInterval(pollTimer);
+        paymentCard.classList.add("hidden");
+        showResult(data.result || {});
+        playDing();
+        showToast("Pembayaran berhasil! Panel dibuat.");
+      } else if (data.status === "expired") {
+        clearInterval(pollTimer);
+        paymentCard.classList.add("hidden");
+        showToast("Order kadaluarsa.");
+        submitBtn.disabled = false;
+      }
+      // pending -> cuek
+    } catch (e) {
+      console.error("poll error", e);
     }
   }, 4000);
 }
 
-/* ----------------- SUBMIT ----------------- */
-$('#orderForm').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
+function showResult(result) {
+  if (!resultCard) return;
+  resultCard.classList.remove("hidden");
 
-  const username = usernameInput.value.trim();
-  const phone = phoneInput.value.trim(); // === PHONE UPDATE ===
-  const paketKey = chosenPaket || localStorage.getItem(CHOSEN_KEY);
-
-  if (!username) return showToast('Username wajib diisi');
-  if (!phone.match(/^[0-9]{8,15}$/)) return showToast('Nomor telepon tidak valid'); // === PHONE UPDATE ===
-  if (!paketKey) return showToast('Pilih paket dulu');
-
-  const paketObj = PAKET.find(x => x.key === paketKey);
-  const totalAmount = calcTotal(paketObj.harga);
-
-  processingCard.classList.remove('hidden');
-  paymentCard.classList.add('hidden');
-  resultCard.classList.add('hidden');
-
-  const createPayload = {
+  const {
+    login,
     username,
-    phone,        // === PHONE UPDATE ===
-    paket: paketKey,
-    amount: totalAmount
-  };
+    password,
+    phone,
+    memory,
+    cpu,
+    dibuat,
+    expired,
+  } = result;
 
-  const j = await createOrderOnServer(createPayload);
-  processingCard.classList.add('hidden');
+  resultCard.innerHTML = `
+    <h2>Panel Siap 🎉</h2>
+    <p><b>Nomor:</b> ${phone || "-"}</p>
+    <p><b>Username Panel:</b> ${username || "-"}</p>
+    <p><b>Password:</b> ${password || "-"}</p>
+    <p><b>Login:</b> <a href="${login || "#"}" target="_blank">${login || "-"}</a></p>
+    <p><b>RAM:</b> ${memory || "-"} MB • <b>CPU:</b> ${cpu || "-"}%</p>
+    <p><b>Dibuat:</b> ${dibuat || "-"}</p>
+    <p><b>Expired:</b> ${expired || "-"}</p>
+  `;
+  resultCard.scrollIntoView({ behavior: "smooth" });
+}
 
-  if (!j.ok) return showToast(j.error || 'Gagal membuat order');
+// =============== RENDER PAKET LIST ===============
 
-  currentOrderId = j.orderId;
+function renderPaketList() {
+  if (!paketListEl) return;
+  paketListEl.innerHTML = PAKET.map(
+    (p) => `
+    <label style="display:block;padding:10px;border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px dashed var(--line);">
+      <input type="radio" name="paket" value="${p.key}" style="margin-right:8px">
+      ${p.label}
+    </label>`
+  ).join("");
+}
 
-  // save current order state
-  localStorage.setItem(
-    CURRENT_ORDER_KEY,
-    JSON.stringify({
-      orderId: j.orderId,
-      expiredAt: j.expiredAt,
-      price: j.price,
-      username,
-      phone,
-      paket: paketKey,
-      qr_png: j.qr_png
-    })
+// =============== EVENT ===============
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderPaketList();
+
+  // open modal pilih paket
+  openSelectorBtn.addEventListener("click", () => {
+    openModalSmooth("selectorModal");
+  });
+
+  // close modal pilih paket
+  $("#closeModal").addEventListener("click", () =>
+    closeModalSmooth("selectorModal")
+  );
+  // backdrop close
+  $$("#selectorModal .modal-backdrop").forEach((bd) =>
+    bd.addEventListener("click", () => closeModalSmooth("selectorModal"))
   );
 
-  paymentCard.classList.remove('hidden');
-  payTotalEl.textContent = 'Rp' + fmtRp(j.price);
-  payExpiryEl.textContent = j.paymentExpiredAt;
-  qrcodeImg.src = j.qr_png;
+  // pilih paket (radio)
+  paketListEl.addEventListener("change", () => {
+    const r = paketListEl.querySelector('input[name="paket"]:checked');
+    chosenPaket = r ? r.value : null;
+    applyChoiceBtn.disabled = !chosenPaket;
+  });
 
-  startCountdown(j.expiredAt);
-  startPolling(j.orderId);
+  // clear paket
+  clearChoiceBtn.addEventListener("click", () => {
+    chosenPaket = null;
+    paketListEl
+      .querySelectorAll('input[name="paket"]')
+      .forEach((i) => (i.checked = false));
+    applyChoiceBtn.disabled = true;
+    chosenBox.classList.add("hidden");
+    seePriceBtn.classList.add("hidden");
+    submitBtn.disabled = true;
+  });
 
-  // telegram notif
-  if (TELEGRAM_BOT && TELEGRAM_CHAT) {
-    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT,
-        text: `Order Baru
-Username: ${username}
-Nomor: ${phone}
-Paket: ${paketKey}
-Total: Rp${fmtRp(j.price)}`
-      })
-    });
+  // apply paket
+  applyChoiceBtn.addEventListener("click", () => {
+    if (!chosenPaket) return;
+    const p = PAKET.find((x) => x.key === chosenPaket);
+    chosenBox.classList.remove("hidden");
+    chosenBox.textContent = p ? p.label : chosenPaket;
+    seePriceBtn.classList.remove("hidden");
+
+    // enable submit kalau username+phone sudah terisi
+    const uOK = usernameInput.value.trim().length >= 3;
+    const phOK = /^[0-9]{8,15}$/.test(phoneInput.value.trim());
+    submitBtn.disabled = !(uOK && phOK);
+    closeModalSmooth("selectorModal");
+  });
+
+  // modal harga paket
+  seePriceBtn.addEventListener("click", () => {
+    if (!chosenPaket) return;
+    const p = PAKET.find((x) => x.key === chosenPaket);
+    const base = p ? p.harga : 0;
+
+    const detail = document.getElementById("priceDetail");
+    if (detail) {
+      detail.innerHTML = `
+        <p><b>Paket:</b> ${p ? p.label : chosenPaket}</p>
+        <p><b>Harga paket:</b> Rp${fmtRp(base)}</p>
+        <p style="margin-top:8px;"><i>Biaya admin/pajak tambahan dihitung oleh sistem pembayaran.</i></p>
+      `;
+    }
+    openModalSmooth("priceModal");
+  });
+
+  $("#closePrice").addEventListener("click", () =>
+    closeModalSmooth("priceModal")
+  );
+  $$("#priceModal .modal-backdrop").forEach((bd) =>
+    bd.addEventListener("click", () => closeModalSmooth("priceModal"))
+  );
+
+  // input username/phone -> enable/disable submit
+  function updateSubmitState() {
+    const uOK = usernameInput.value.trim().length >= 3;
+    const phOK = /^[0-9]{8,15}$/.test(phoneInput.value.trim());
+    submitBtn.disabled = !(uOK && phOK && chosenPaket);
   }
-});
 
-/* ----------------- RESTORE ON LOAD ----------------- */
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = JSON.parse(localStorage.getItem(CURRENT_ORDER_KEY) || "null");
-  const savedPhone = localStorage.getItem(FORM_PHONE_KEY);   // === PHONE UPDATE ===
-  const savedUser = localStorage.getItem(FORM_USER_KEY);
+  usernameInput.addEventListener("input", updateSubmitState);
+  phoneInput.addEventListener("input", updateSubmitState);
 
-  if (savedUser) usernameInput.value = savedUser;
-  if (savedPhone) phoneInput.value = savedPhone;              // === PHONE UPDATE ===
+  // refresh input
+  refreshFormBtn.addEventListener("click", () => {
+    usernameInput.value = "";
+    phoneInput.value = "";
+    chosenPaket = null;
+    chosenBox.classList.add("hidden");
+    seePriceBtn.classList.add("hidden");
+    submitBtn.disabled = true;
+    showToast("Form direset.");
+  });
 
-  if (saved) {
-    paymentCard.classList.remove('hidden');
-    payTotalEl.textContent = 'Rp' + fmtRp(saved.price);
-    qrcodeImg.src = saved.qr_png;
+  // cancel pembayaran
+  cancelBtn.addEventListener("click", () => {
+    openModalSmooth("confirmCancel");
+  });
 
-    startCountdown(saved.expiredAt);
-    startPolling(saved.orderId);
+  $("#noCancel").addEventListener("click", () =>
+    closeModalSmooth("confirmCancel")
+  );
+  $("#yesCancel").addEventListener("click", async () => {
+    closeModalSmooth("confirmCancel");
+    if (currentOrderId) {
+      try {
+        await fetch(`/api/order/${currentOrderId}`, { method: "DELETE" });
+      } catch {}
+    }
+    currentOrderId = null;
+    if (pollTimer) clearInterval(pollTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+    paymentCard.classList.add("hidden");
+    submitBtn.disabled = false;
+    showToast("Pembayaran dibatalkan.");
+  });
+
+  // history modal (sementara cuma placeholder biar gak error)
+  historyBtn.addEventListener("click", () => {
+    if (historyListEl) {
+      historyListEl.innerHTML =
+        '<p class="muted">Fitur riwayat belum diaktifkan.</p>';
+    }
+    openModalSmooth("historyModal");
+  });
+  $("#closeHistory").addEventListener("click", () =>
+    closeModalSmooth("historyModal")
+  );
+  $("#closeHistoryOk").addEventListener("click", () =>
+    closeModalSmooth("historyModal")
+  );
+  clearAllHistoryBtn.addEventListener("click", () =>
+    showToast("Belum ada riwayat untuk dihapus.")
+  );
+
+  // SUBMIT FORM
+  $("#orderForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+
+    const username = usernameInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    if (!/^[a-zA-Z0-9]{3,15}$/.test(username)) {
+      showToast("Username 3–15 huruf/angka tanpa spasi.");
+      return;
+    }
+    if (!/^[0-9]{8,15}$/.test(phone)) {
+      showToast("Nomor telepon 8–15 angka.");
+      return;
+    }
+    if (!chosenPaket) {
+      showToast("Pilih paket panel dulu.");
+      return;
+    }
 
     submitBtn.disabled = true;
-  }
-});
+    processingCard.classList.remove("hidden");
+    paymentCard.classList.add("hidden");
+    resultCard.classList.add("hidden");
 
-// auto save phone
-phoneInput.addEventListener('input', () => {                 // === PHONE UPDATE ===
-  localStorage.setItem(FORM_PHONE_KEY, phoneInput.value);
-});
+    try {
+      const res = await fetch("/api/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          phone,
+          paket: chosenPaket,
+        }),
+      });
 
-// auto save username
-usernameInput.addEventListener('input', () => {
-  localStorage.setItem(FORM_USER_KEY, usernameInput.value);
-});
+      const data = await res.json();
+      processingCard.classList.add("hidden");
 
-// show history
-historyBtn.addEventListener('click', () => {
-  renderHistoryList();
-  openModalSmooth('historyModal');
-});
+      if (!data.ok) {
+        showToast(data.error || "Gagal membuat order.");
+        submitBtn.disabled = false;
+        return;
+      }
 
-/* END FILE */
+      // tampilkan QRIS
+      currentOrderId = data.orderId;
+      paymentCard.classList.remove("hidden");
+      payTotalEl.textContent = "Rp" + fmtRp(data.price || 0);
+      payExpiryEl.textContent = new Date(
+        data.expiredAt || Date.now()
+      ).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      qrcodeImg.src = data.qr_png || "";
+
+      startCountdown(Number(data.expiredAt) || Date.now() + 5 * 60 * 1000);
+      startPolling(data.orderId);
+      showToast("QRIS berhasil dibuat, silakan scan.");
+
+    } catch (err) {
+      console.error(err);
+      processingCard.classList.add("hidden");
+      submitBtn.disabled = false;
+      showToast("Terjadi kesalahan jaringan.");
+    }
+  });
+});
